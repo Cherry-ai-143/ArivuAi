@@ -85,6 +85,9 @@ class ChapterService:
             chapter.course_id,
         )
 
+        if not course:
+            raise ValueError("Course for this chapter not found.")
+
         if course.teacher_id != current_user.id:
             raise PermissionError(
                 "You can update only your own chapters."
@@ -111,6 +114,9 @@ class ChapterService:
         course = self.course_repository.get_course_by_id(
             chapter.course_id,
         )
+
+        if not course:
+            raise ValueError("Course for this chapter not found.")
 
         if course.teacher_id != current_user.id:
             raise PermissionError(

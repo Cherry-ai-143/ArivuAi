@@ -34,6 +34,10 @@ import { createChapter, updateChapter, deleteChapter, getChaptersByCourse } from
 import { createLesson, updateLesson, deleteLesson, getLessonsByChapter } from '@/lib/services/lesson.service'
 import { uploadLessonResource, deleteLessonResource } from '@/lib/services/lesson-resource.service'
 import { uploadFile } from '@/lib/services/uploaded-file.service'
+import type { UploadedFileResponse } from '@/lib/services/uploaded-file.service'
+import { getApiErrorMessage } from '@/lib/api/errors'
+import { getSubjectOptionsForInstitution } from '@/lib/constants/adaptive-options'
+import { useAuth } from '@/hooks/useAuth'
 import type { Course } from '@/types/course'
 
 interface CreateCourseDialogProps {
@@ -162,6 +166,62 @@ const DEFAULT_FORM_DATA: CourseFormData = {
   visibility: 'Draft',
 }
 
+function normalizeSubjectValues(subjects?: string[] | null): string[] {
+  if (!subjects) return []
+  return subjects
+    .filter(Boolean)
+    .map((subject) => String(subject).trim())
+    .filter(Boolean)
+}
+
+function mapInstitutionTypeToAcademicLevel(institutionType?: string): AcademicLevel | undefined {
+  const normalized = String(institutionType || '').toLowerCase()
+  if (!normalized) return undefined
+  if (normalized.includes('school')) return 'Higher School (Class 7-10)'
+  if (normalized.includes('higher secondary') || normalized.includes('puc') || normalized.includes('11th') || normalized.includes('12th')) return 'PUC (11-12)'
+  if (normalized.includes('engineering')) return 'Engineering'
+  if (normalized.includes('postgraduate') || normalized.includes('university') || normalized.includes('mtech') || normalized.includes('msc') || normalized.includes('mba') || normalized.includes('mca')) return 'Postgraduate'
+  if (normalized.includes('diploma') || normalized.includes('polytechnic')) return 'Diploma'
+  if (normalized.includes('degree') || normalized.includes('undergraduate') || normalized.includes('bsc') || normalized.includes('bca') || normalized.includes('bcom') || normalized.includes('ba')) return 'Undergraduate Degree'
+  return undefined
+}
+
+function mapEducationLevelToAcademicLevel(educationLevel?: string): AcademicLevel | undefined {
+  const normalized = String(educationLevel || '').toLowerCase()
+  if (!normalized) return undefined
+  if (normalized.includes('higher school') || normalized.includes('class 7') || normalized.includes('class 10')) return 'Higher School (Class 7-10)'
+  if (normalized.includes('puc') || normalized.includes('11th') || normalized.includes('12th')) return 'PUC (11-12)'
+  if (normalized.includes('diploma')) return 'Diploma'
+  if (normalized.includes('undergraduate') || normalized.includes('bsc') || normalized.includes('bca') || normalized.includes('bcom') || normalized.includes('ba')) return 'Undergraduate Degree'
+  if (normalized.includes('engineering') || normalized.includes('btech')) return 'Engineering'
+  if (normalized.includes('postgraduate') || normalized.includes('mtech') || normalized.includes('msc') || normalized.includes('mba') || normalized.includes('mca')) return 'Postgraduate'
+  return undefined
+}
+
+function getAcademicLevelFromProfile(currentUser: any, profileDetails: any): AcademicLevel | undefined {
+  return (
+    mapEducationLevelToAcademicLevel(currentUser?.education_level || profileDetails?.education) ||
+    mapInstitutionTypeToAcademicLevel(currentUser?.institution_type || profileDetails?.institutionType)
+  )
+}
+
+function getTeacherSubjectOptions(currentUser: any, profileDetails: any): string[] {
+  const rawSubjects =
+    currentUser?.interests ||
+    profileDetails?.subjects ||
+    profileDetails?.learningInterests ||
+    []
+
+  const subjectOptions = normalizeSubjectValues(rawSubjects)
+  if (subjectOptions.length > 0) {
+    return Array.from(new Set(subjectOptions))
+  }
+
+  const institutionType = currentUser?.institution_type || profileDetails?.institutionType
+  const educationLevel = currentUser?.education_level || profileDetails?.education
+  return getSubjectOptionsForInstitution(institutionType, educationLevel)
+}
+
 const WIZARD_STEPS = [
   { id: 1, title: 'Academic Info', subtitle: 'Tier & Subject', icon: BookOpen },
   { id: 2, title: 'Course Details', subtitle: 'Metadata & Media', icon: BookOpen },
@@ -173,10 +233,50 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const { currentUser, profileDetails } = useAuth()
 
   const initialStepParam = searchParams.get('step')
   const [step, setStep] = useState<number>(initialStepParam ? Math.min(4, Number(initialStepParam)) : 1)
-  const [formData, setFormData] = useState<CourseFormData>(DEFAULT_FORM_DATA)
+  const [formData, setFormData] = useState<CourseFormData>(() => {
+    const initialAcademicLevel = getAcademicLevelFromProfile(currentUser, profileDetails)
+    const preferredSubjects = getTeacherSubjectOptions(currentUser, profileDetails)
+    return {
+      ...DEFAULT_FORM_DATA,
+      academicLevel: initialAcademicLevel || DEFAULT_FORM_DATA.academicLevel,
+      subject: preferredSubjects[0] || DEFAULT_FORM_DATA.subject,
+      courseName: preferredSubjects[0] || DEFAULT_FORM_DATA.courseName,
+    }
+  })
+  const [hasHydratedProfileDefaults, setHasHydratedProfileDefaults] = useState(false)
+
+  const profileAcademicLevel = useMemo(
+    () => getAcademicLevelFromProfile(currentUser, profileDetails),
+    [currentUser, profileDetails]
+  )
+
+  const profileSubjectOptions = useMemo(
+    () => getTeacherSubjectOptions(currentUser, profileDetails),
+    [currentUser, profileDetails]
+  )
+
+  useEffect(() => {
+    if (hasHydratedProfileDefaults) return
+    if (!currentUser && !profileDetails) return
+
+    const preferredSubjects = profileSubjectOptions
+    const profileAcademic = profileAcademicLevel
+    const hasDefaults = Boolean(profileAcademic) || preferredSubjects.length > 0
+
+    if (!hasDefaults) return
+
+    setFormData((prev) => ({
+      ...prev,
+      academicLevel: profileAcademic || prev.academicLevel,
+      subject: preferredSubjects[0] || prev.subject,
+      courseName: preferredSubjects[0] || prev.courseName,
+    }))
+    setHasHydratedProfileDefaults(true)
+  }, [currentUser, profileDetails, profileAcademicLevel, profileSubjectOptions, hasHydratedProfileDefaults])
 
   // Active Draft Course ID in Database
   const [activeCourseId, setActiveCourseId] = useState<number | null>(null)
@@ -202,6 +302,10 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
   const [isDraggingResource, setIsDraggingResource] = useState(false)
   const [resourceValidationError, setResourceValidationError] = useState<string | null>(null)
   const [isUploadingResourceModal, setIsUploadingResourceModal] = useState(false)
+
+  // Course-level uploaded files (PDFs, Docs) that apply to the entire course
+  const [courseFiles, setCourseFiles] = useState<UploadedFileResponse[]>([])
+  const [isUploadingCourseFile, setIsUploadingCourseFile] = useState(false)
 
   // Hydrate initialCourse draft data if provided
   useEffect(() => {
@@ -353,27 +457,31 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
       setIsSyncing(true)
       if (!activeCourseId) {
         // POST /api/v1/courses/
-        const created = await createCourse({
+        const payload = {
           title: titleToUse,
           description: descToUse,
           thumbnail: formData.thumbnailUrl || null,
           level: courseLevel,
           language: formData.language || 'English',
           duration_hours: durationToUse,
-        })
+        }
+        console.debug('Creating course payload:', payload)
+        const created = await createCourse(payload)
         setActiveCourseId(created.id)
         markSaved()
         return created.id
       } else {
         // PUT /api/v1/courses/{id}
-        await updateCourse(activeCourseId, {
+        const payload = {
           title: titleToUse,
           description: descToUse,
           thumbnail: formData.thumbnailUrl || null,
           level: courseLevel,
           language: formData.language || 'English',
           duration_hours: durationToUse,
-        })
+        }
+        console.debug('Updating course payload:', payload)
+        await updateCourse(activeCourseId, payload)
         markSaved()
         return activeCourseId
       }
@@ -478,6 +586,13 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
     return ['General Knowledge', 'Aptitude & Reasoning', 'Soft Skills', 'Research Methodology']
   }, [formData.academicLevel, formData.stream])
 
+  const subjectOptions = useMemo(() => {
+    if (profileSubjectOptions.length > 0) {
+      return profileSubjectOptions
+    }
+    return dynamicSubjects
+  }, [profileSubjectOptions, dynamicSubjects])
+
   // AI Recommended Modules
   const aiSuggestedModules = useMemo(() => {
     const sub = (formData.subject || '').toLowerCase()
@@ -561,6 +676,76 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
     } finally {
       setIsUploadingThumbnail(false)
     }
+  }
+
+  
+// purpose : Upload and persist a course-wide study material against the active backend course ID.
+const handleCourseFileUpload = async (file: File) => {
+  if (!file) return
+
+  try {
+    setIsUploadingCourseFile(true)
+
+    // purpose : Use the already persisted course ID whenever available.
+    let courseId = activeCourseId
+
+    // purpose : Create/synchronize the course draft when no backend course ID exists yet.
+    if (!courseId) {
+      courseId = await syncCourseDraft()
+    }
+
+    // purpose : Prevent orphaned file uploads when the course ID cannot be resolved.
+    if (!courseId || !Number.isInteger(Number(courseId))) {
+      console.error("Course-wide upload aborted: invalid course ID", {
+        activeCourseId,
+        courseId,
+      })
+
+      showToast("Unable to determine the course ID. Please save the course first.")
+      return
+    }
+
+    const resolvedCourseId = Number(courseId)
+
+    // purpose : Confirm the exact course ID being associated with the uploaded material.
+    console.debug("Uploading course-wide study material", {
+      courseId: resolvedCourseId,
+      filename: file.name,
+    })
+
+    // purpose : Persist the PDF/document in the backend and associate it with the course.
+    const res = await uploadFile(
+      file,
+      `Course Material: ${file.name}`,
+      undefined,
+      resolvedCourseId
+    )
+
+    // purpose : Keep the persisted backend response in the course material UI state.
+    setCourseFiles((prev) => [...prev, res])
+
+    console.debug("Course-wide study material uploaded successfully", {
+      uploadedFileId: res.id,
+      courseId: res.course_id,
+      fileUrl: res.file_url,
+    })
+
+    showToast("Course-level material uploaded successfully!")
+  } catch (err: any) {
+    console.error("Failed to upload course-level file:", err)
+
+    const message = getApiErrorMessage(err)
+    showToast(`Upload failed: ${message}`)
+  } finally {
+    setIsUploadingCourseFile(false)
+  }
+}
+
+
+
+  const handleRemoveCourseFile = (id: number) => {
+    setCourseFiles((prev) => prev.filter((f) => f.id !== id))
+    showToast('Removed course material from this draft (local).')
   }
 
   // Incremental API helpers for Chapters & Lessons
@@ -1161,33 +1346,48 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {[
-                  { title: 'Higher School (Class 7-10)', desc: 'CBSE, ICSE, State Boards' },
-                  { title: 'PUC (11-12)', desc: 'Science, Commerce, Arts Streams' },
-                  { title: 'Diploma', desc: 'Polytechnic Technical Diplomas' },
-                  { title: 'Undergraduate Degree', desc: 'BSc, BCA, BCom, BA Degrees' },
-                  { title: 'Engineering', desc: 'BE, BTech Technical Courses' },
-                  { title: 'Postgraduate', desc: 'MTech, MSc, MCA, MBA Programs' },
-                ].map((tier) => {
-                  const isSelected = formData.academicLevel === tier.title
-                  return (
-                    <div
-                      key={tier.title}
-                      onClick={() => setFormData({ ...formData, academicLevel: tier.title as AcademicLevel })}
-                      className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-2 ${
-                        isSelected ? 'border-primary bg-primary/5 shadow-md ring-2 ring-primary/20' : 'border-border bg-card hover:border-primary/40'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm text-foreground">{tier.title}</h4>
-                        {isSelected && <CheckCircle2 className="size-5 text-primary" />}
+              {profileAcademicLevel ? (
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                    <Sparkles className="size-4" />
+                    Academic Level detected from your profile
+                  </div>
+                  <div className="rounded-2xl border border-border bg-background p-4">
+                    <p className="text-sm font-semibold text-foreground">{profileAcademicLevel}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Using your existing onboarding data from {currentUser?.institution_type || profileDetails?.institutionType || 'your profile'}.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {[
+                    { title: 'Higher School (Class 7-10)', desc: 'CBSE, ICSE, State Boards' },
+                    { title: 'PUC (11-12)', desc: 'Science, Commerce, Arts Streams' },
+                    { title: 'Diploma', desc: 'Polytechnic Technical Diplomas' },
+                    { title: 'Undergraduate Degree', desc: 'BSc, BCA, BCom, BA Degrees' },
+                    { title: 'Engineering', desc: 'BE, BTech Technical Courses' },
+                    { title: 'Postgraduate', desc: 'MTech, MSc, MCA, MBA Programs' },
+                  ].map((tier) => {
+                    const isSelected = formData.academicLevel === tier.title
+                    return (
+                      <div
+                        key={tier.title}
+                        onClick={() => setFormData({ ...formData, academicLevel: tier.title as AcademicLevel })}
+                        className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-2 ${
+                          isSelected ? 'border-primary bg-primary/5 shadow-md ring-2 ring-primary/20' : 'border-border bg-card hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-foreground">{tier.title}</h4>
+                          {isSelected && <CheckCircle2 className="size-5 text-primary" />}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{tier.desc}</p>
                       </div>
-                      <p className="text-xs text-muted-foreground">{tier.desc}</p>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1195,10 +1395,16 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
                     <label className="text-xs font-semibold text-foreground">Academic Subject Target *</label>
                     <select
                       value={formData.subject}
-                      onChange={(e) => setFormData({ ...formData, subject: e.target.value, courseName: formData.courseName || e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setFormData((prev) => {
+                          const shouldOverwrite = !prev.courseName || prev.courseName === prev.subject
+                          return { ...prev, subject: value, courseName: shouldOverwrite ? value : prev.courseName }
+                        })
+                      }}
                       className="mt-1 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm text-foreground font-bold"
                     >
-                      {dynamicSubjects.map((sub) => (
+                      {subjectOptions.map((sub) => (
                         <option key={sub} value={sub}>{sub}</option>
                       ))}
                     </select>
@@ -1565,6 +1771,8 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
                                 </div>
                               ))}
                             </div>
+
+                              
                           </div>
                         ))}
                       </div>
@@ -1572,6 +1780,55 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
                   ))}
                 </div>
               )}
+
+              {/* COURSE-LEVEL MATERIALS UPLOAD */}
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Course-wide Study Materials</h4>
+                    <p className="text-xs text-muted-foreground">Upload one PDF or document for the entire course (syllabus, handbook, notes).</p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 px-4 py-2 text-xs font-bold cursor-pointer hover:bg-indigo-500/20">
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleCourseFileUpload(file)
+                        if (e.target) e.target.value = ''
+                      }}
+                      className="hidden"
+                    />
+                    <UploadCloud className="size-4" /> Upload Course PDF / Document
+                  </label>
+                </div>
+
+                {isUploadingCourseFile && (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-primary">
+                    <Loader2 className="size-4 animate-spin" /> Uploading course material...
+                  </div>
+                )}
+
+                {courseFiles.length > 0 && (
+                  <div className="mt-4 grid gap-3">
+                    {courseFiles.map((file) => (
+                      <div key={file.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-border bg-background p-3">
+                        <div className="flex items-center gap-3">
+                          <FileText className="size-5 text-primary" />
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{file.title}</p>
+                            <p className="text-[11px] text-muted-foreground">{formatFileSize(file.file_size)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <a href={getImageUrl(file.file_url)} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary underline">Open</a>
+                          <button type="button" onClick={() => handleRemoveCourseFile(file.id)} className="text-xs font-semibold text-destructive">Remove</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
 

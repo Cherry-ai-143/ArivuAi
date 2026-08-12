@@ -76,5 +76,6 @@ class LessonResource(Base):
 
     lesson: Mapped["Lesson"] = relationship(
         "Lesson",
-        backref="resources",
+        back_populates="resources",
+        passive_deletes=True,
     )

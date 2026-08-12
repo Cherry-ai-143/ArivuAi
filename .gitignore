@@ -62,3 +62,8 @@ frontend/.v0-trash/
 
 .DS_Store
 Thumbs.db
+# Runtime uploaded files
+backend/uploads/
+
+# Frontend build/typecheck cache
+frontend/tsconfig.tsbuildinfo

@@ -100,3 +100,11 @@ class Lesson(Base):
         back_populates="lesson",
         cascade="all, delete-orphan",
     )
+
+    # Lesson Resources Relationship
+    resources: Mapped[list["LessonResource"]] = relationship(
+        "LessonResource",
+        back_populates="lesson",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

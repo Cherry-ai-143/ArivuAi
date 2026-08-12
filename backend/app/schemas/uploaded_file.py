@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 class UploadedFileCreate(BaseModel):
     title: str
     lesson_id: Optional[int] = None
+    course_id: Optional[int] = None
 
 
 # Update Uploaded File
@@ -19,6 +20,7 @@ class UploadedFileUpdate(BaseModel):
 class UploadedFileResponse(BaseModel):
     id: int
     lesson_id: Optional[int] = None
+    course_id: Optional[int] = None
     title: str
     original_filename: str
     stored_filename: str

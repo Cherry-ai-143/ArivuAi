@@ -51,6 +51,12 @@ apiClient.interceptors.request.use((config) => {
     config.headers = headers;
   }
 
+  if (config.data instanceof FormData && config.headers) {
+    const headers = new AxiosHeaders(config.headers);
+    headers.delete("Content-Type");
+    config.headers = headers;
+  }
+
   return config;
 });
 

@@ -119,6 +119,7 @@ class CourseRepository:
                     JOIN chapters c ON l.chapter_id = c.id
                     WHERE c.course_id = :cid
                 )
+                OR course_id = :cid
                 """),
                 {"cid": course_id}
             )

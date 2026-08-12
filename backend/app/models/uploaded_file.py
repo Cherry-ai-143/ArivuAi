@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from app.models.document_chunk import DocumentChunk
 
 from sqlalchemy import (
@@ -19,6 +19,7 @@ from app.database.base import Base
 
 # Type Checking Imports
 if TYPE_CHECKING:
+    from app.models.course import Course
     from app.models.lesson import Lesson
     from app.models.user import User
 
@@ -36,6 +37,12 @@ class UploadedFile(Base):
     # Lesson Relationship
     lesson_id: Mapped[int | None] = mapped_column(
         ForeignKey("lessons.id"),
+        nullable=True,
+    )
+
+    # Course Relationship
+    course_id: Mapped[int | None] = mapped_column(
+        ForeignKey("courses.id"),
         nullable=True,
     )
 
@@ -89,8 +96,14 @@ class UploadedFile(Base):
     )
 
     # Lesson Relationship
-    lesson: Mapped["Lesson"] = relationship(
+    lesson: Mapped[Optional["Lesson"]] = relationship(
         "Lesson",
+        back_populates="uploaded_files",
+    )
+
+    # Course Relationship
+    course: Mapped[Optional["Course"]] = relationship(
+        "Course",
         back_populates="uploaded_files",
     )
 

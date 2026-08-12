@@ -149,4 +149,11 @@ class Course(Base):
         cascade="all, delete-orphan",
     )
 
+    # Uploaded Files Relationship
+    uploaded_files: Mapped[list["UploadedFile"]] = relationship(
+        "UploadedFile",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
+
  
