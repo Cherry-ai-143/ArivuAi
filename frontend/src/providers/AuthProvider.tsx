@@ -205,7 +205,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           onboarding_completed: true,
         });
 
-        setCurrentUser(updatedUser);
+        setCurrentUser((prev) => {
+          if (!prev) return updatedUser
+          return {
+            ...updatedUser,
+            avatar_url: details.avatarUrl ?? prev.avatar_url,
+          }
+        });
         queryClient.invalidateQueries({ queryKey: ["currentUser"] });
 
         const destination = getDashboardPathForRole(updatedUser.role) || "/dashboard";

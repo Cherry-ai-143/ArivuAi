@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
+import { useUploadAvatar } from '@/hooks/useProfile'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import type { TeacherInstitutionType } from '@/types/user-profile'
 
@@ -45,11 +46,13 @@ const STEPS = [
 
 export function TeacherOnboardingWizard() {
   const { currentUser, profileDetails, completeOnboarding } = useAuth()
+  const uploadAvatarMutation = useUploadAvatar()
   const [step, setStep] = useState(1)
   const [isDragOver, setIsDragOver] = useState(false)
 
   // Step 1: Photo
   const [avatarUrl, setAvatarUrl] = useState(profileDetails?.avatarUrl || '')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
 
   // Step 2: Adaptive Professional Info
   const [institutionType, setInstitutionType] = useState<TeacherInstitutionType>(
@@ -254,6 +257,7 @@ export function TeacherOnboardingWizard() {
 
   const handleImageUpload = (file: File) => {
     if (file && file.type.startsWith('image/')) {
+      setAvatarFile(file)
       const reader = new FileReader()
       reader.onload = (e) => {
         if (e.target?.result) {
@@ -276,9 +280,16 @@ export function TeacherOnboardingWizard() {
     )
   }
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    let finalAvatarUrl = avatarUrl
+
+    if (avatarFile) {
+      const result = await uploadAvatarMutation.mutateAsync(avatarFile)
+      finalAvatarUrl = result.avatar_url
+    }
+
     completeOnboarding({
-      avatarUrl,
+      avatarUrl: finalAvatarUrl,
       institutionType,
       institutionName,
       designation,
@@ -425,7 +436,10 @@ export function TeacherOnboardingWizard() {
                   {avatarUrl ? (
                     <button
                       type="button"
-                      onClick={() => setAvatarUrl('')}
+                      onClick={() => {
+                        setAvatarUrl('')
+                        setAvatarFile(null)
+                      }}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-all"
                     >
                       <Trash2 className="size-3.5" />
