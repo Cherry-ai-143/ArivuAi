@@ -1,3 +1,5 @@
+# purpose : Handle course business rules, ownership checks, and course operations.
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -10,14 +12,15 @@ from app.schemas.course import CourseCreate, CourseUpdate
 class CourseService:
 
     def __init__(self, db: Session):
+        # purpose : Initialize the course service with a database repository.
         self.repository = CourseRepository(db)
 
-    # Create Course
     def create_course(
         self,
         course_data: CourseCreate,
         current_user: User,
     ):
+        # purpose : Allow only teachers/admins to create courses.
 
         if current_user.role not in [
             UserRole.TEACHER,
@@ -30,13 +33,13 @@ class CourseService:
 
         existing_course = self.repository.get_course_by_title(
             current_user.id,
-            course_data.title,
+            course_data.title.strip(),
         )
 
         if existing_course:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Course title already exists.",
+                detail="Course title already exists for this teacher.",
             )
 
         return self.repository.create_course(
@@ -44,11 +47,11 @@ class CourseService:
             course_data,
         )
 
-    # Get Course
     def get_course_by_id(
         self,
         course_id: int,
     ):
+        # purpose : Retrieve a course by its ID.
 
         course = self.repository.get_course_by_id(course_id)
 
@@ -60,23 +63,23 @@ class CourseService:
 
         return course
 
-    # Get All Courses
     def get_all_courses(self):
+        # purpose : Return all courses through the repository.
 
         return self.repository.get_all_courses()
 
-    # Update Course
     def update_course(
         self,
         course_id: int,
         course_data: CourseUpdate,
         current_user: User,
     ):
+        # purpose : Update a course while enforcing teacher ownership.
 
         course = self.get_course_by_id(course_id)
 
         if (
-            current_user.role not in [UserRole.TEACHER, UserRole.ADMIN]
+            current_user.role != UserRole.ADMIN
             and course.teacher_id != current_user.id
         ):
             raise HTTPException(
@@ -89,17 +92,17 @@ class CourseService:
             course_data,
         )
 
-    # Delete Course
     def delete_course(
         self,
         course_id: int,
         current_user: User,
     ):
+        # purpose : Delete a course while enforcing teacher ownership.
 
         course = self.get_course_by_id(course_id)
 
         if (
-            current_user.role not in [UserRole.TEACHER, UserRole.ADMIN]
+            current_user.role != UserRole.ADMIN
             and course.teacher_id != current_user.id
         ):
             raise HTTPException(

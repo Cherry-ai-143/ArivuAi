@@ -438,66 +438,108 @@ export function CreateCourseDialog({ isOpen, onClose, initialCourse }: CreateCou
     return url
   }
 
-  // Ensure Course Draft is created on backend (POST once, PUT afterwards)
-  const syncCourseDraft = async (): Promise<number | null> => {
-    const courseLevel = mapAcademicLevelToCourseLevel(formData.academicLevel)
+// purpose : Create the course draft once and update the same backend course afterwards.
+const syncCourseDraft = async (): Promise<number | null> => {
+  const courseLevel = mapAcademicLevelToCourseLevel(
+    formData.academicLevel
+  )
 
-    // Ensure title >= 3 chars and description >= 10 chars to pass backend Pydantic validation
-    let titleToUse = formData.courseName.trim()
-    if (!titleToUse) titleToUse = `${formData.subject || 'Course'} Draft`
-    if (titleToUse.length < 3) titleToUse = titleToUse.padEnd(3, ' Course')
+  let titleToUse = formData.courseName?.trim() || ''
 
-    let descToUse = formData.fullDescription.trim() || formData.shortDescription.trim()
-    if (!descToUse) descToUse = 'Comprehensive course summary and syllabus overview.'
-    if (descToUse.length < 10) descToUse = descToUse.padEnd(10, ' syllabus details')
-
-    const durationToUse = Math.max(1, parseInt(formData.durationHours, 10) || 40)
-
-    try {
-      setIsSyncing(true)
-      if (!activeCourseId) {
-        // POST /api/v1/courses/
-        const payload = {
-          title: titleToUse,
-          description: descToUse,
-          thumbnail: formData.thumbnailUrl || null,
-          level: courseLevel,
-          language: formData.language || 'English',
-          duration_hours: durationToUse,
-        }
-        console.debug('Creating course payload:', payload)
-        const created = await createCourse(payload)
-        setActiveCourseId(created.id)
-        markSaved()
-        return created.id
-      } else {
-        // PUT /api/v1/courses/{id}
-        const payload = {
-          title: titleToUse,
-          description: descToUse,
-          thumbnail: formData.thumbnailUrl || null,
-          level: courseLevel,
-          language: formData.language || 'English',
-          duration_hours: durationToUse,
-        }
-        console.debug('Updating course payload:', payload)
-        await updateCourse(activeCourseId, payload)
-        markSaved()
-        return activeCourseId
-      }
-    } catch (err: any) {
-      console.error('Failed to sync course draft:', err)
-      const detailMsg = err?.response?.data?.detail
-      const detailStr = Array.isArray(detailMsg)
-        ? detailMsg.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join(', ')
-        : (typeof detailMsg === 'string' ? detailMsg : err.message || 'Server validation error')
-      showToast(`Error saving course draft: ${detailStr}`)
-      return null
-    } finally {
-      setIsSyncing(false)
-    }
+  if (!titleToUse) {
+    titleToUse = `${formData.subject?.trim() || 'Course'} Draft`
   }
 
+  if (titleToUse.length < 3) {
+    titleToUse = `${titleToUse} Course`.slice(0, 255)
+  }
+
+  let descToUse =
+    formData.fullDescription?.trim() ||
+    formData.shortDescription?.trim() ||
+    ''
+
+  if (descToUse.length < 10) {
+    descToUse =
+      'Comprehensive course summary and syllabus overview.'
+  }
+
+  const durationToUse = Math.max(
+    1,
+    Number.parseInt(formData.durationHours || '40', 10) || 40
+  )
+
+  const payload = {
+    title: titleToUse,
+    description: descToUse,
+    thumbnail: formData.thumbnailUrl?.trim() || null,
+    level: courseLevel,
+    language: formData.language?.trim() || 'English',
+    duration_hours: durationToUse,
+  }
+
+  console.log('COURSE DRAFT PAYLOAD:', payload)
+
+  try {
+    setIsSyncing(true)
+
+    if (!activeCourseId) {
+      // purpose : Create a new backend course only when this draft has no course ID.
+      const created = await createCourse(payload)
+
+      setActiveCourseId(created.id)
+      markSaved()
+
+      return created.id
+    }
+
+    // purpose : Update the already-created backend course instead of creating duplicates.
+    await updateCourse(activeCourseId, payload)
+
+    markSaved()
+
+    return activeCourseId
+  } catch (err: any) {
+    console.error('Failed to sync course draft:', err)
+
+    const responseData = err?.response?.data
+
+    console.error(
+      'Course API error:',
+      JSON.stringify(responseData, null, 2)
+    )
+
+    const detailMsg = responseData?.detail
+
+    let detailStr = 'Unable to save course.'
+
+    if (Array.isArray(detailMsg)) {
+      detailStr = detailMsg
+        .map((item: any) => {
+          const location = Array.isArray(item?.loc)
+            ? item.loc.join('.')
+            : ''
+
+          const message = item?.msg || 'Validation error'
+
+          return location
+            ? `${location}: ${message}`
+            : message
+        })
+        .join(', ')
+    } else if (typeof detailMsg === 'string') {
+      detailStr = detailMsg
+    } else if (err?.message) {
+      detailStr = err.message
+    }
+
+    showToast(`Error saving course draft: ${detailStr}`)
+
+    return null
+  } finally {
+    setIsSyncing(false)
+  }
+}
   // Step Validation Logic
   const validateStep = (currentStep: number): boolean => {
     const errors: Record<string, string> = {}

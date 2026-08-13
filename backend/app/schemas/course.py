@@ -1,3 +1,5 @@
+# purpose : Define Pydantic schemas used for creating, updating, and returning courses.
+
 from datetime import datetime
 from typing import Optional
 
@@ -6,8 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.enums import CourseLevel
 
 
-# Base Schema
 class CourseBase(BaseModel):
+    # purpose : Define common course fields and validation rules.
+
     title: str = Field(
         ...,
         min_length=3,
@@ -35,13 +38,14 @@ class CourseBase(BaseModel):
     )
 
 
-# Create Course
 class CourseCreate(CourseBase):
+    # purpose : Validate data required when creating a course.
     pass
 
 
-# Update Course
 class CourseUpdate(BaseModel):
+    # purpose : Validate optional fields used when updating an existing course.
+
     title: Optional[str] = Field(
         default=None,
         min_length=3,
@@ -71,8 +75,9 @@ class CourseUpdate(BaseModel):
     is_published: Optional[bool] = None
 
 
-# Course Response
 class CourseResponse(CourseBase):
+    # purpose : Define the course structure returned by the API.
+
     id: int
 
     teacher_id: int
@@ -88,8 +93,9 @@ class CourseResponse(CourseBase):
     )
 
 
-# Course List Response
 class CourseListResponse(BaseModel):
+    # purpose : Define a non-paginated course list response.
+
     courses: list[CourseResponse]
 
     total: int
