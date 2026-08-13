@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
   X,
@@ -24,6 +24,8 @@ import {
   Tag,
   BarChart2,
   Trash2,
+  ChevronDown,
+  BookMarked,
 } from "lucide-react";
 import {
   useLessonAiResources,
@@ -35,7 +37,139 @@ import {
 } from "@/hooks/useQuestionBank";
 import { ResourcePreviewModal } from "./resource-preview-modal";
 import { GenerationHistoryDrawer } from "./generation-history-drawer";
-import type { BloomLevel, CandidateQuestion } from "@/types/question";
+import type { BloomLevel, CandidateQuestion, DiscoveredChapter } from "@/types/question";
+
+// ─── Chapter Scroll Dropdown ───────────────────────────────────────────────────
+// purpose : Replace native <select> with a fully scrollable, keyboard-accessible
+//           custom dropdown that shows all discovered PDF chapters with page metadata.
+interface ChapterScrollDropdownProps {
+  chapters: DiscoveredChapter[];
+  selectedChapterTitle: string;
+  onSelect: (title: string) => void;
+  activeChapter: DiscoveredChapter | null;
+}
+
+function ChapterScrollDropdown({
+  chapters,
+  selectedChapterTitle,
+  onSelect,
+  activeChapter,
+}: ChapterScrollDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const displayTitle = selectedChapterTitle || (chapters[0]?.title ?? "Select a Chapter");
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-indigo-500/20">
+      <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
+        Select Chapter
+      </label>
+
+      {/* Trigger button */}
+      <div className="relative" ref={wrapperRef}>
+        <button
+          type="button"
+          id="chapter-dropdown-trigger"
+          onClick={() => setOpen((v) => !v)}
+          className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-3.5 py-2.5 text-xs font-bold text-foreground hover:bg-muted/60 focus:outline-none focus:ring-2 focus:ring-purple-500/30 transition-colors"
+        >
+          <span className="flex items-center gap-2 min-w-0 truncate">
+            <BookMarked className="size-3.5 text-indigo-500 flex-shrink-0" />
+            <span className="truncate">{displayTitle}</span>
+          </span>
+          <span className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 text-[10px] font-bold">
+              {chapters.length} chapters
+            </span>
+            <ChevronDown
+              className={`size-3.5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            />
+          </span>
+        </button>
+
+        {/* Scrollable chapter list */}
+        {open && (
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-border bg-card shadow-xl overflow-hidden">
+            <div
+              id="chapter-dropdown-list"
+              className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-border/50"
+            >
+              {chapters.length === 0 ? (
+                <div className="p-3 text-xs text-muted-foreground text-center">
+                  No chapters found
+                </div>
+              ) : (
+                chapters.map((ch) => {
+                  const isSelected = ch.title === selectedChapterTitle;
+                  return (
+                    <button
+                      key={ch.title}
+                      type="button"
+                      onClick={() => {
+                        onSelect(ch.title);
+                        setOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/60 ${
+                        isSelected
+                          ? "bg-indigo-500/10 text-indigo-700 font-extrabold"
+                          : "text-foreground font-semibold"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        {isSelected ? (
+                          <Check className="size-3 text-indigo-600 flex-shrink-0" />
+                        ) : (
+                          <span className="size-3 flex-shrink-0" />
+                        )}
+                        <span className="text-xs truncate">{ch.title}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 text-[10px] font-bold whitespace-nowrap">
+                          pp.{ch.start_page}–{ch.end_page}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 text-[10px] font-bold whitespace-nowrap">
+                          {ch.word_count.toLocaleString()} w
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Active chapter metadata badges */}
+      {activeChapter && (
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold">
+          <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 font-bold">
+            Pages: {activeChapter.start_page}–{activeChapter.end_page}
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-700 font-bold">
+            Chunks: {activeChapter.chunk_count}
+          </span>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 font-bold">
+            Context: {activeChapter.word_count.toLocaleString()} words
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+// ───────────────────────────────────────────────────────────────────────────────
 
 interface AiQuizGeneratorModalProps {
   isOpen: boolean;
@@ -43,6 +177,7 @@ interface AiQuizGeneratorModalProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
+
 
 export function AiQuizGeneratorModal({
   isOpen,
@@ -82,6 +217,14 @@ export function AiQuizGeneratorModal({
   // Selected Resources State
   const [selectedResourceIds, setSelectedResourceIds] = useState<Set<string>>(new Set());
 
+  // purpose : Manage selected source material type (Lesson Overview, YouTube, or Course PDF Textbook).
+  const [sourceType, setSourceType] = useState<"overview" | "youtube" | "pdf">("youtube");
+
+  // purpose : Track selected PDF textbook resource ID and chapter scope selection.
+  const [selectedPdfId, setSelectedPdfId] = useState<number | null>(null);
+  const [pdfScopeMode, setPdfScopeMode] = useState<"entire" | "chapter">("chapter");
+  const [selectedChapterTitle, setSelectedChapterTitle] = useState<string>("");
+
   useEffect(() => {
     if (discoveryData?.resources) {
       const initialSet = new Set<string>();
@@ -89,8 +232,25 @@ export function AiQuizGeneratorModal({
         if (r.enabled_by_default) initialSet.add(r.id);
       });
       setSelectedResourceIds(initialSet);
+
+      const pdfRes = discoveryData.resources.find((r) => r.pdf_id || r.type.includes("PDF"));
+      if (pdfRes) {
+        setSelectedPdfId(pdfRes.pdf_id || pdfRes.db_id || null);
+        if (pdfRes.chapters && pdfRes.chapters.length > 0) {
+          setSelectedChapterTitle(pdfRes.chapters[0].title);
+        }
+      }
+
+      if (discoveryData.has_pdf && !discoveryData.has_youtube) {
+        setSourceType("pdf");
+      }
     }
   }, [discoveryData]);
+
+  // purpose : Lookup discovered PDF resources and currently active selected chapter.
+  const pdfResources = discoveryData?.resources.filter((r) => r.pdf_id || r.type.includes("PDF")) || [];
+  const activePdfResource = pdfResources.find((r) => (r.pdf_id || r.db_id) === selectedPdfId) || pdfResources[0] || null;
+  const activeChapter = activePdfResource?.chapters?.find((ch) => ch.title === selectedChapterTitle) || activePdfResource?.chapters?.[0] || null;
 
   // Handle Preset Switching
   const handleSelectPreset = (selectedPreset: "practice" | "exam" | "custom") => {
@@ -156,19 +316,34 @@ export function AiQuizGeneratorModal({
   };
 
   // Launch AI Generation Job
+  // purpose : Construct request payload with selected source material, PDF ID, and chapter scope parameters.
   const handleStartGeneration = async () => {
     try {
       setStep(2); // Progress screen
+
+      const reqPayload: any = {
+        num_questions: numQuestions,
+        difficulty_dist: difficultyDist,
+        type_dist: typeDist,
+        bloom_level: bloomLevel,
+        selected_resource_ids: Array.from(selectedResourceIds),
+        include_description: sourceType === "overview" || selectedResourceIds.has(`desc_${lessonId}`),
+      };
+
+      if (sourceType === "pdf" && selectedPdfId) {
+        reqPayload.selected_pdf_id = selectedPdfId;
+        if (pdfScopeMode === "chapter" && selectedChapterTitle) {
+          reqPayload.selected_chapter_title = selectedChapterTitle;
+          if (activeChapter) {
+            reqPayload.start_page = activeChapter.start_page;
+            reqPayload.end_page = activeChapter.end_page;
+          }
+        }
+      }
+
       const res = await generatePreviewMutation.mutateAsync({
         lessonId,
-        request: {
-          num_questions: numQuestions,
-          difficulty_dist: difficultyDist,
-          type_dist: typeDist,
-          bloom_level: bloomLevel,
-          selected_resource_ids: Array.from(selectedResourceIds),
-          include_description: selectedResourceIds.has(`desc_${lessonId}`),
-        },
+        request: reqPayload,
       });
 
       setActiveJobId(res.job_id);
@@ -355,72 +530,206 @@ export function AiQuizGeneratorModal({
               </div>
             </div>
 
-            {/* Discovered Lesson Resources Checkboxes with Badges & Preview Button */}
+            {/* SOURCE MATERIAL SELECTION */}
+            {/* purpose : Render Source Material selector (Lesson Overview, YouTube Video, Course Textbook PDF) */}
             <div className="space-y-2">
               <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
-                Lesson Materials & Cache Status
+                Source Material
               </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSourceType("overview")}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    sourceType === "overview"
+                      ? "border-purple-600 bg-purple-600/10 text-purple-600 ring-1 ring-purple-600/30 font-extrabold"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <FileCode className="size-4" /> Lesson Overview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourceType("youtube")}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    sourceType === "youtube"
+                      ? "border-purple-600 bg-purple-600/10 text-purple-600 ring-1 ring-purple-600/30 font-extrabold"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Video className="size-4 text-rose-500" /> YouTube Video
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourceType("pdf")}
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    sourceType === "pdf"
+                      ? "border-purple-600 bg-purple-600/10 text-purple-600 ring-1 ring-purple-600/30 font-extrabold"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <FileText className="size-4 text-indigo-500" /> Course Textbook PDF
+                </button>
+              </div>
+            </div>
 
-              {isLoadingDiscovery ? (
-                <div className="flex items-center gap-2 p-4 rounded-xl border border-border bg-muted/20 text-xs text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin text-purple-600" />
-                  <span>Discovering attached lesson resources...</span>
+            {/* GENERATION SCOPE FOR COURSE TEXTBOOK PDF */}
+            {/* purpose : Render Generation Scope selector for Course Textbook PDF (Entire Textbook vs Selected Chapter) */}
+            {sourceType === "pdf" && (
+              <div className="space-y-3 p-4 rounded-2xl border border-indigo-500/30 bg-indigo-500/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <BookOpen className="size-4 text-indigo-600" /> Uploaded Course Textbook PDF
+                  </span>
+                  {pdfResources.length > 1 && (
+                    <select
+                      value={selectedPdfId || ""}
+                      onChange={(e) => {
+                        const pid = Number(e.target.value);
+                        setSelectedPdfId(pid);
+                        const match = pdfResources.find((r) => (r.pdf_id || r.db_id) === pid);
+                        if (match?.chapters && match.chapters.length > 0) {
+                          setSelectedChapterTitle(match.chapters[0].title);
+                        }
+                      }}
+                      className="rounded-xl border border-border bg-card px-2.5 py-1 text-xs font-bold text-foreground"
+                    >
+                      {pdfResources.map((p) => (
+                        <option key={p.id} value={p.pdf_id || p.db_id}>
+                          {p.title} ({p.total_pages || 0} pages)
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {discoveryData?.resources.map((r) => {
-                    const isChecked = selectedResourceIds.has(r.id);
-                    return (
-                      <div
-                        key={r.id}
-                        className={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${isChecked ? "border-purple-600 bg-purple-600/5 ring-1 ring-purple-600/30" : "border-border bg-card"
-                          }`}
-                      >
+
+                {activePdfResource ? (
+                  <div className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="size-4 text-indigo-500 flex-shrink-0" />
+                      <span className="font-bold text-foreground truncate">{activePdfResource.title}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
+                      {activePdfResource.detail}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                    No course textbook PDF detected. Upload a PDF to the course to enable chapter-scoped generation.
+                  </div>
+                )}
+
+                {activePdfResource && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
+                        Generation Scope
+                      </label>
+                      <div className="flex items-center gap-4 text-xs font-bold">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="pdfScope"
+                            checked={pdfScopeMode === "entire"}
+                            onChange={() => setPdfScopeMode("entire")}
+                            className="text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>Entire Textbook</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="pdfScope"
+                            checked={pdfScopeMode === "chapter"}
+                            onChange={() => setPdfScopeMode("chapter")}
+                            className="text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>Selected Chapter</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {pdfScopeMode === "chapter" && (
+                      <ChapterScrollDropdown
+                        chapters={activePdfResource?.chapters || []}
+                        selectedChapterTitle={selectedChapterTitle}
+                        onSelect={setSelectedChapterTitle}
+                        activeChapter={activeChapter}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Discovered Lesson Resources Checkboxes with Badges & Preview Button */}
+            {sourceType !== "pdf" && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
+                  Lesson Materials & Cache Status
+                </label>
+
+                {isLoadingDiscovery ? (
+                  <div className="flex items-center gap-2 p-4 rounded-xl border border-border bg-muted/20 text-xs text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin text-purple-600" />
+                    <span>Discovering attached lesson resources...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {discoveryData?.resources.map((r) => {
+                      const isChecked = selectedResourceIds.has(r.id);
+                      return (
                         <div
-                          className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
-                          onClick={() => handleToggleResource(r.id)}
+                          key={r.id}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 transition-all ${isChecked ? "border-purple-600 bg-purple-600/5 ring-1 ring-purple-600/30" : "border-border bg-card"
+                            }`}
                         >
-                          {r.type.includes("PDF") ? (
-                            <FileText className="size-4 text-rose-500 flex-shrink-0" />
-                          ) : r.type.includes("YouTube") ? (
-                            <Video className="size-4 text-rose-600 flex-shrink-0" />
-                          ) : (
-                            <FileCode className="size-4 text-indigo-500 flex-shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-bold text-foreground truncate">{r.title}</p>
-                              <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 text-[9px] font-bold">
-                                ✓ Cached
-                              </span>
+                          <div
+                            className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                            onClick={() => handleToggleResource(r.id)}
+                          >
+                            {r.type.includes("PDF") ? (
+                              <FileText className="size-4 text-rose-500 flex-shrink-0" />
+                            ) : r.type.includes("YouTube") ? (
+                              <Video className="size-4 text-rose-600 flex-shrink-0" />
+                            ) : (
+                              <FileCode className="size-4 text-indigo-500 flex-shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-bold text-foreground truncate">{r.title}</p>
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 text-[9px] font-bold">
+                                  ✓ Cached
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">{r.detail}</p>
                             </div>
-                            <p className="text-[10px] text-muted-foreground">{r.detail}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewResourceId(r.id)}
+                              className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Preview Content"
+                            >
+                              <Eye className="size-3.5" />
+                            </button>
+                            <button type="button" onClick={() => handleToggleResource(r.id)}>
+                              {isChecked ? (
+                                <CheckSquare className="size-4 text-purple-600" />
+                              ) : (
+                                <Square className="size-4 text-muted-foreground" />
+                              )}
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewResourceId(r.id)}
-                            className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Preview Content"
-                          >
-                            <Eye className="size-3.5" />
-                          </button>
-                          <button type="button" onClick={() => handleToggleResource(r.id)}>
-                            {isChecked ? (
-                              <CheckSquare className="size-4 text-purple-600" />
-                            ) : (
-                              <Square className="size-4 text-muted-foreground" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Topic Coverage Detection Controls */}
             <div className="space-y-2">

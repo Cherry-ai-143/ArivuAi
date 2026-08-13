@@ -124,7 +124,7 @@ export function useLessonAiResources(lessonId?: number) {
     queryKey: ["ai-resources", lessonId],
     queryFn: () => discoverLessonResources(lessonId!),
     enabled: Boolean(token && lessonId && lessonId > 0),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 5,
   });
 }
 

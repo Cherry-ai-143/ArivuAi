@@ -67,13 +67,22 @@ class GeminiProvider(AIProvider):
 - "correct_option" MUST be "a", "b", "c", or "d".
 """
 
+        # purpose : Render Gemini prompt with strict source isolation directives to guarantee questions are generated ONLY from supplied context without outside knowledge.
         prompt = f"""
-Act as an expert university professor and master assessment author. Generate exactly {num_questions} high-quality questions based strictly on the provided lesson context below.
+Act as an expert university professor and master assessment author. Generate exactly {num_questions} high-quality questions based strictly on the provided source context below.
 
-=== LESSON CONTEXT ===
+=== SUPPLIED SOURCE CONTEXT ===
 {context}
 
 {type_instructions}
+
+=== MANDATORY SOURCE ISOLATION RULES (STRICT COMPLIANCE REQUIRED) ===
+1. Use ONLY the supplied source context above.
+2. DO NOT use any outside or general domain knowledge not explicitly stated in the context.
+3. DO NOT infer facts, definitions, or conclusions that are not directly supported by the text.
+4. Every generated question and correct answer choice MUST be directly answerable and verifiable from the supplied text.
+5. DO NOT reference information from other chapters, modules, or unsupplied textbook sections.
+6. DO NOT create questions about topics absent from the supplied context.
 
 === MANDATORY AUTHORING RULES ===
 1. Total Questions: Exactly {num_questions}
@@ -87,7 +96,7 @@ Act as an expert university professor and master assessment author. Generate exa
    - "Why is X preferred over Y..."
    DO NOT repeat repetitive phrases like "According to the lesson..." or "In the lesson context...".
 3. Bloom's Taxonomy Distribution: Vary question cognitive levels automatically across Knowledge, Understanding, Application, Analysis.
-4. Explanations: Provide 1-3 concise natural academic sentences explaining why the correct answer is right.
+4. Explanations: Provide 1-3 concise natural academic sentences explaining why the correct answer is right using text evidence.
 
 Return ONLY a valid JSON array of objects matching the required question structure for the type:
 [
@@ -103,7 +112,7 @@ Return ONLY a valid JSON array of objects matching the required question structu
     "difficulty": "Medium",
     "bloom_level": "Understanding",
     "explanation": "The correct answer is...",
-    "source_attribution": "Video 04:12 - 08:30",
+    "source_attribution": "Textbook Section 1.2",
     "ai_confidence": 94
   }}
 ]

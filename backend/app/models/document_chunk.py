@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    String,
     Text,
 )
 from sqlalchemy.orm import (
@@ -47,6 +48,18 @@ class DocumentChunk(Base):
     chunk_text: Mapped[str] = mapped_column(
         Text,
         nullable=False,
+    )
+
+    # purpose : Track the PDF 1-indexed page number from which this chunk was extracted.
+    page_number: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # purpose : Track the detected chapter or unit title to enable chapter-scoped question generation.
+    chapter_title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     # Created Time

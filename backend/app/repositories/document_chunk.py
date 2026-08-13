@@ -9,18 +9,22 @@ class DocumentChunkRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    # Create Chunk
+    # purpose : Create a DocumentChunk record with optional page_number and chapter_title metadata.
     def create(
         self,
         uploaded_file_id: int,
         chunk_index: int,
         chunk_text: str,
+        page_number: int | None = None,
+        chapter_title: str | None = None,
     ) -> DocumentChunk:
 
         chunk = DocumentChunk(
             uploaded_file_id=uploaded_file_id,
             chunk_index=chunk_index,
             chunk_text=chunk_text,
+            page_number=page_number,
+            chapter_title=chapter_title,
         )
 
         self.db.add(chunk)

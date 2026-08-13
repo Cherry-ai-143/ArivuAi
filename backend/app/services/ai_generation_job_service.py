@@ -1,6 +1,6 @@
 import uuid
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,8 @@ from app.models.ai_generation_log import AIGenerationLog
 from app.models.question import Question, QuestionType
 from app.models.lesson import Lesson
 from app.models.lesson_resource import LessonResource
+from app.models.uploaded_file import UploadedFile
+from app.models.document_chunk import DocumentChunk
 from app.ai.providers.gemini_provider import GeminiProvider
 from app.ai.extractors.resource_extractor_service import ResourceExtractorService
 from app.ai.pipeline.quality_validator import QualityValidator
@@ -26,6 +28,7 @@ class AIGenerationJobService:
         self.validator = QualityValidator(db)
         self.token_chunker = TokenChunker(target_tokens=4000, overlap_tokens=250)
 
+    # purpose : Insert structured audit event into ai_generation_logs.
     def log_event(self, job_id: str, stage: str, message: str, severity: str = "INFO"):
         """Insert structured audit event into ai_generation_logs."""
         log = AIGenerationLog(
@@ -37,6 +40,7 @@ class AIGenerationJobService:
         self.db.add(log)
         self.db.commit()
 
+    # purpose : Create and enqueue a new AI generation job with provided parameters.
     def create_job(
         self,
         lesson_id: int,
@@ -60,7 +64,7 @@ class AIGenerationJobService:
             configuration=configuration,
             total_words=total_words,
             estimated_duration_sec=estimated_duration,
-            expires_at=datetime.utcnow() + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         )
 
         self.db.add(job)
@@ -70,6 +74,7 @@ class AIGenerationJobService:
         self.log_event(job_id, "QUEUED", "Job enqueued in background queue", "INFO")
         return job
 
+    # purpose : Execute background generation workflow with chapter-scoped PDF context retrieval and Gemini pipeline.
     def execute_job_sync(self, job_id: str):
         """Execute the job processing workflow with DB locking, chunk resumption, and stage transitions."""
         job = self.db.query(AIGenerationJob).filter(AIGenerationJob.job_id == job_id).first()
@@ -102,11 +107,17 @@ class AIGenerationJobService:
                 raise ValueError("Lesson not found.")
 
             selected_resource_ids = (job.configuration or {}).get("selected_resource_ids", [])
+            selected_pdf_id = (job.configuration or {}).get("selected_pdf_id")
+            selected_chapter_title = (job.configuration or {}).get("selected_chapter_title")
+            start_page = (job.configuration or {}).get("start_page")
+            end_page = (job.configuration or {}).get("end_page")
             merged_text_parts = []
 
+            # purpose : Extract lesson description overview if requested.
             if (job.configuration or {}).get("include_description", True) and lesson.description:
                 merged_text_parts.append(f"LESSON OVERVIEW:\n{lesson.description}")
 
+            # purpose : Extract attached lesson resources (YouTube transcripts, lesson notes, etc.).
             attached_resources = self.db.query(LessonResource).filter(LessonResource.lesson_id == lesson_id).all()
             for r in attached_resources:
                 r_key = f"resource_{r.id}"
@@ -120,6 +131,36 @@ class AIGenerationJobService:
                         merged_text_parts.append(f"YOUTUBE LECTURE TRANSCRIPT [{r.title}]:\n{data['text']}")
                     elif "NOTE" in rtype:
                         merged_text_parts.append(f"LESSON NOTES [{r.title}]:\n{r.description or r.title}")
+
+            # purpose : Retrieve scoped document_chunks for course-level PDF textbooks when selected.
+            target_pdf_id = selected_pdf_id
+            if not target_pdf_id and selected_resource_ids:
+                for r_id in selected_resource_ids:
+                    if str(r_id).startswith("pdf_"):
+                        try:
+                            target_pdf_id = int(str(r_id).replace("pdf_", ""))
+                            break
+                        except ValueError:
+                            pass
+
+            if target_pdf_id:
+                chunk_query = self.db.query(DocumentChunk).filter(DocumentChunk.uploaded_file_id == target_pdf_id)
+
+                if selected_chapter_title and selected_chapter_title not in ["Entire Textbook", "Entire Document", "All Chapters"]:
+                    chunk_query = chunk_query.filter(DocumentChunk.chapter_title == selected_chapter_title)
+
+                if start_page is not None and end_page is not None and start_page > 0 and end_page >= start_page:
+                    chunk_query = chunk_query.filter(DocumentChunk.page_number >= start_page, DocumentChunk.page_number <= end_page)
+
+                target_chunks = chunk_query.order_by(DocumentChunk.chunk_index.asc()).all()
+
+                if target_chunks:
+                    pdf_text = "\n\n".join([c.chunk_text for c in target_chunks if c.chunk_text])
+                    ufile = self.db.query(UploadedFile).filter(UploadedFile.id == target_pdf_id).first()
+                    pdf_title = ufile.title or ufile.original_filename if ufile else f"PDF #{target_pdf_id}"
+                    scope_info = f"Chapter: {selected_chapter_title}" if selected_chapter_title else (f"Pages {start_page}-{end_page}" if start_page else "Entire Resource")
+                    merged_text_parts.append(f"TEXTBOOK SOURCE [{pdf_title} - {scope_info}]:\n{pdf_text}")
+                    self.log_event(job_id, "EXTRACTING", f"Retrieved {len(target_chunks)} chunks from PDF #{target_pdf_id} (Scope: {scope_info})", "INFO")
 
             context_text = "\n\n".join(merged_text_parts)
             if not context_text.strip():
@@ -197,7 +238,7 @@ class AIGenerationJobService:
                         source_range=c_info["source_range"],
                         token_count=c_info["token_count"],
                         questions_requested=qs_to_request,
-                        started_at=datetime.utcnow(),
+                        started_at=datetime.now(timezone.utc),
                     )
                     self.db.add(chunk_rec)
                     self.db.commit()
@@ -305,7 +346,7 @@ class AIGenerationJobService:
                 chunk_rec.questions_generated = generated_cnt
                 chunk_rec.duplicates_removed = dups_removed
                 chunk_rec.confidence_avg = int(confidence_sum / max(1, generated_cnt))
-                chunk_rec.finished_at = datetime.utcnow()
+                chunk_rec.finished_at = datetime.now(timezone.utc)
                 self.db.commit()
 
                 self.log_event(
@@ -388,7 +429,7 @@ class AIGenerationJobService:
             .all()
         )
 
-        elapsed_sec = int((datetime.utcnow() - job.created_at.replace(tzinfo=None)).total_seconds()) if job.created_at else 0
+        elapsed_sec = int((datetime.now(timezone.utc).replace(tzinfo=None) - job.created_at.replace(tzinfo=None)).total_seconds()) if job.created_at else 0
 
         return {
             "found": True,
@@ -413,6 +454,55 @@ class AIGenerationJobService:
                 for l in logs
             ],
         }
+
+    # purpose : Retrieve past AI generation jobs for a given lesson to support history tracking.
+    def get_generation_history(self, lesson_id: int) -> list[dict[str, Any]]:
+        jobs = (
+            self.db.query(AIGenerationJob)
+            .filter(AIGenerationJob.lesson_id == lesson_id)
+            .order_by(AIGenerationJob.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        history = []
+        for job in jobs:
+            q_count = (
+                self.db.query(AIGenerationQuestion)
+                .filter(AIGenerationQuestion.job_id == job.job_id)
+                .count()
+            )
+            history.append({
+                "job_id": job.job_id,
+                "status": job.status,
+                "current_stage": job.current_stage,
+                "progress_pct": job.progress_pct,
+                "question_count": q_count,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "configuration": job.configuration,
+            })
+        return history
+
+    # purpose : Return sample raw text content preview for a given lesson resource ID.
+    def get_resource_preview(self, lesson_id: int, resource_id: str) -> dict[str, Any]:
+        if resource_id.startswith("pdf_"):
+            try:
+                ufile_id = int(resource_id.replace("pdf_", ""))
+                chunks = (
+                    self.db.query(DocumentChunk)
+                    .filter(DocumentChunk.uploaded_file_id == ufile_id)
+                    .order_by(DocumentChunk.chunk_index.asc())
+                    .limit(5)
+                    .all()
+                )
+                preview_text = "\n\n".join([c.chunk_text for c in chunks if c.chunk_text])
+                return {
+                    "resource_id": resource_id,
+                    "preview_text": preview_text[:2000],
+                    "chunk_count": len(chunks),
+                }
+            except Exception as ex:
+                return {"resource_id": resource_id, "preview_text": "", "error": str(ex)}
+        return {"resource_id": resource_id, "preview_text": ""}
 
     def update_candidate_question(self, temp_question_id: int, update_data: dict[str, Any]) -> AIGenerationQuestion | None:
         temp_q = self.db.query(AIGenerationQuestion).filter(AIGenerationQuestion.id == temp_question_id).first()
@@ -460,7 +550,7 @@ class AIGenerationJobService:
 
         saved_questions = []
         for temp_q in approved_temp:
-            q_type_str = str(temp_q.question_type or "MULTIPLE_CHOICE").upper().replace(" ", "_").replace("/", "_")
+            q_type_str = (temp_q.question_type or "MULTIPLE_CHOICE").upper().replace(" ", "_").replace("/", "_")
             if "TRUE" in q_type_str:
                 q_type_enum = QuestionType.TRUE_FALSE
             elif "FILL" in q_type_str:
@@ -469,7 +559,6 @@ class AIGenerationJobService:
                 q_type_enum = QuestionType.MULTIPLE_CHOICE
 
             new_q = Question(
-                assessment_id=None,
                 lesson_id=job.lesson_id,
                 question_text=temp_q.question_text,
                 option_a=temp_q.option_a,

@@ -117,11 +117,25 @@ export interface PaginatedQuestionResponse {
   pages: number;
 }
 
+// purpose : Discovered PDF chapter metadata structure for chapter-scoped question generation.
+export interface DiscoveredChapter {
+  title: string;
+  start_page: number;
+  end_page: number;
+  chunk_count: number;
+  word_count: number;
+}
+
+// purpose : Resource discovery payload for lesson and course-level materials.
 export interface DiscoveredResource {
   id: string;
+  pdf_id?: number;
   db_id?: number;
   type: string;
   title: string;
+  filename?: string;
+  total_pages?: number;
+  chapters?: DiscoveredChapter[];
   word_count: number;
   detail: string;
   enabled_by_default: boolean;
@@ -180,6 +194,7 @@ export interface AIGenerationJobStatusResponse {
   error_message?: string | null;
 }
 
+// purpose : Request payload for initializing async AI question generation jobs.
 export interface QuizGenerationRequest {
   difficulty?: string;
   difficulty_dist?: string;
@@ -188,6 +203,10 @@ export interface QuizGenerationRequest {
   num_questions?: number;
   selected_resource_ids?: string[];
   include_description?: boolean;
+  selected_pdf_id?: number;
+  selected_chapter_title?: string;
+  start_page?: number;
+  end_page?: number;
 }
 
 export interface QuizGenerationResponse {

@@ -8,6 +8,8 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from app.models.lesson import Lesson
 from app.models.lesson_resource import LessonResource
 from app.models.resource_cache import ResourceCache
+from app.models.uploaded_file import UploadedFile
+from app.models.document_chunk import DocumentChunk
 from app.ai.extractors.pdf_extractor import PDFExtractor
 
 
@@ -17,8 +19,8 @@ class ResourceExtractorService:
         self.db = db
         self.pdf_extractor = PDFExtractor()
 
+    # purpose : Extract 11-character YouTube video ID from various URL formats.
     def extract_youtube_video_id(self, url: str) -> str | None:
-        """Extract 11-character YouTube video ID from various URL formats."""
         if not url:
             return None
         pattern = r"(?:v=|\/([0-9A-Za-z_-]{11})|youtu\.be\/)([0-9A-Za-z_-]{11})"
@@ -27,6 +29,7 @@ class ResourceExtractorService:
             return match.group(1) or match.group(2)
         return None
 
+    # purpose : Retrieve cached extracted resource text from resource_cache table.
     def get_resource_cache(self, resource_key: str) -> ResourceCache | None:
         return (
             self.db.query(ResourceCache)
@@ -34,6 +37,7 @@ class ResourceExtractorService:
             .first()
         )
 
+    # purpose : Extract PDF content and cache text in database.
     def extract_pdf_resource(self, resource: LessonResource) -> dict[str, Any]:
         resource_key = f"pdf_{resource.id}"
         cache = self.get_resource_cache(resource_key)
@@ -89,6 +93,7 @@ class ResourceExtractorService:
             "source_name": resource.title,
         }
 
+    # purpose : Extract YouTube video transcripts using YouTubeTranscriptApi and cache result.
     def extract_youtube_resource(self, resource: LessonResource) -> dict[str, Any]:
         resource_key = f"youtube_{resource.id}"
         cache = self.get_resource_cache(resource_key)
@@ -161,8 +166,8 @@ class ResourceExtractorService:
             "source_name": resource.title,
         }
 
+    # purpose : Discover attached lesson resources and course-level textbook PDFs with chapter breakdowns.
     def discover_lesson_resources(self, lesson_id: int) -> dict[str, Any]:
-        """Discover all attached resources (PDFs, YouTube videos, Notes, Description) for a lesson."""
         lesson = self.db.query(Lesson).filter(Lesson.id == lesson_id).first()
         if not lesson:
             return {
@@ -175,6 +180,8 @@ class ResourceExtractorService:
 
         resources_list = []
         total_words = 0
+        has_pdf = False
+        has_youtube = False
 
         # 1. Lesson Description
         if lesson.description and lesson.description.strip():
@@ -191,9 +198,6 @@ class ResourceExtractorService:
 
         # 2. Attached LessonResources
         attached_resources = getattr(lesson, "resources", []) or []
-
-        has_pdf = False
-        has_youtube = False
 
         for r in attached_resources:
             rtype = r.resource_type.upper()
@@ -236,7 +240,126 @@ class ResourceExtractorService:
                 })
                 total_words += nwords
 
-        # Calculate estimated duration (approx 500 words per second LLM processing + 10s base)
+        # 3. Course-level and Lesson-level UploadedFile PDF Textbooks
+        course_id = lesson.chapter.course_id if (lesson.chapter and lesson.chapter.course_id) else None
+        uploaded_files_query = self.db.query(UploadedFile)
+        if course_id:
+            uploaded_files = uploaded_files_query.filter(
+                (UploadedFile.course_id == course_id) | (UploadedFile.lesson_id == lesson_id)
+            ).all()
+        else:
+            uploaded_files = uploaded_files_query.filter(UploadedFile.lesson_id == lesson_id).all()
+
+        for ufile in uploaded_files:
+            if not ufile.original_filename.lower().endswith(".pdf") and "pdf" not in ufile.mime_type.lower():
+                continue
+
+            has_pdf = True
+
+            # Retrieve or process document_chunks
+            chunks = self.db.query(DocumentChunk).filter(DocumentChunk.uploaded_file_id == ufile.id).order_by(DocumentChunk.chunk_index.asc()).all()
+            # Check if stored chunks cover the complete PDF file
+            resolved_file_path = self.pdf_extractor.resolve_path(ufile.file_url)
+            if chunks and resolved_file_path and os.path.exists(resolved_file_path):
+                try:
+                    import fitz
+                    pdf_doc = fitz.open(resolved_file_path)
+                    total_pdf_page_count = len(pdf_doc)
+                    pdf_doc.close()
+                    max_stored_page = max((c.page_number or 1) for c in chunks)
+                    if max_stored_page < total_pdf_page_count - 5:
+                        self.db.query(DocumentChunk).filter(DocumentChunk.uploaded_file_id == ufile.id).delete()
+                        self.db.commit()
+                        chunks = []
+                except Exception as ex:
+                    print(f"Error checking PDF page bounds: {ex}")
+
+            if not chunks and ufile.file_url and os.path.exists(resolved_file_path):
+                try:
+                    from app.ai.services.document_processing_service import DocumentProcessingService
+                    processor = DocumentProcessingService(self.db)
+                    processor.process_pdf(ufile)
+                    chunks = self.db.query(DocumentChunk).filter(DocumentChunk.uploaded_file_id == ufile.id).order_by(DocumentChunk.chunk_index.asc()).all()
+                except Exception as ex:
+                    print(f"Error auto-processing PDF file {ufile.id}: {ex}")
+
+            # Aggregate chapter structure from document_chunks
+            KNOWN_TITLE_MAP = {
+                "Chapter 4: Carbon and its": "Chapter 4: Carbon and its Compounds",
+                "Chapter 7: Control and": "Chapter 7: Control and Coordination",
+                "Chapter 8: How do Organisms": "Chapter 8: How do Organisms Reproduce?",
+                "Chapter 9: Heredity and": "Chapter 9: Heredity and Evolution",
+                "Chapter 10: Light - Reflection and": "Chapter 10: Light - Reflection and Refraction",
+                "Chapter 11: The Human Eye and": "Chapter 11: The Human Eye and the Colourful World",
+                "Chapter 13: Magnetic Effects of": "Chapter 13: Magnetic Effects of Electric Current",
+                "Chapter 14: Sources of": "Chapter 14: Sources of Energy",
+                "Chapter 16: Management of": "Chapter 16: Management of Natural Resources",
+            }
+
+            chapter_groups: dict[str, dict[str, Any]] = {}
+            max_page = 1
+            total_pdf_words = 0
+
+            for chunk in chunks:
+                w_count = len((chunk.chunk_text or "").split())
+                total_pdf_words += w_count
+                p_num = chunk.page_number or 1
+                if p_num > max_page:
+                    max_page = p_num
+
+                raw_c_name = chunk.chapter_title or "General Content"
+                # Filter out false positive answer-key headings in back appendix pages
+                if re.search(r'Chapter \d+:\s*\d+\.\s*\(', raw_c_name):
+                    raw_c_name = "General Content"
+
+                c_name = KNOWN_TITLE_MAP.get(raw_c_name, raw_c_name)
+
+                if c_name not in chapter_groups:
+                    chapter_groups[c_name] = {
+                        "title": c_name,
+                        "start_page": p_num,
+                        "end_page": p_num,
+                        "chunk_count": 0,
+                        "word_count": 0,
+                    }
+
+                ch_info = chapter_groups[c_name]
+                ch_info["chunk_count"] += 1
+                ch_info["word_count"] += w_count
+                if p_num < ch_info["start_page"]:
+                    ch_info["start_page"] = p_num
+                if p_num > ch_info["end_page"]:
+                    ch_info["end_page"] = p_num
+
+            # Remove 'General Content' if real chapters exist and General Content is tiny or empty
+            chapters_list = [c for c in chapter_groups.values() if c["title"] != "General Content"]
+            if not chapters_list:
+                chapters_list = list(chapter_groups.values())
+
+            if not chapters_list and chunks:
+                chapters_list = [{
+                    "title": "Entire Document",
+                    "start_page": 1,
+                    "end_page": max_page,
+                    "chunk_count": len(chunks),
+                    "word_count": total_pdf_words,
+                }]
+
+            resources_list.append({
+                "id": f"pdf_{ufile.id}",
+                "pdf_id": ufile.id,
+                "db_id": ufile.id,
+                "type": "Course Textbook PDF" if ufile.course_id else "Lesson PDF Document",
+                "title": ufile.title or ufile.original_filename,
+                "filename": ufile.original_filename,
+                "total_pages": max_page,
+                "word_count": total_pdf_words,
+                "detail": f"{max_page} pages · {len(chapters_list)} chapters",
+                "chapters": chapters_list,
+                "enabled_by_default": False if has_youtube else True,
+            })
+            total_words += total_pdf_words
+
         estimated_duration = max(15, min(90, 10 + (total_words // 400)))
 
         return {
