@@ -27,7 +27,7 @@ import { getSubjectOptionsForInstitution, TEACHER_GOAL_OPTIONS } from '@/lib/con
 
 const INSTITUTION_TYPES: TeacherInstitutionType[] = [
   'School (Class 7–10)',
-  'Higher Secondary / PUC',
+  'PUC / 11th–12th',
   'Degree College',
   'Engineering College',
   'Coaching Institute',

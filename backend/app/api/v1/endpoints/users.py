@@ -56,6 +56,19 @@ def update_current_user_profile(
     return service.update_profile(current_user, user_update)
 
 
+@router.delete(
+    "/me",
+    status_code=status.HTTP_200_OK,
+    summary="Delete current authenticated user account and all associated data",
+)
+def delete_current_user_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = UserService(db)
+    return service.delete_account(current_user)
+
+
 @router.post(
     "/change-password",
     response_model=ChangePasswordResponse,

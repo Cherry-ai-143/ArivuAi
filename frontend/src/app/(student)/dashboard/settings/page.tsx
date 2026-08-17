@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Settings as SettingsIcon,
   User,
@@ -15,10 +15,11 @@ import {
   Save,
   Check,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
-import { useUpdateProfile, useUploadAvatar, useChangePassword } from '@/hooks/useProfile'
+import { useUpdateProfile, useUploadAvatar, useChangePassword, useDeleteAccount } from '@/hooks/useProfile'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { ChipSelector } from '@/components/ui/chip-selector'
 import type { EducationLevel } from '@/types/user-profile'
@@ -37,16 +38,22 @@ const EDUCATION_LEVELS: EducationLevel[] = [
 ]
 
 export default function SettingsPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab') as SettingsTab | null
-  const { currentUser, profileDetails, updateProfile: updateLocalProfile } = useAuth()
+  const { currentUser, profileDetails, updateProfile: updateLocalProfile, logout } = useAuth()
   const updateProfileMutation = useUpdateProfile()
   const uploadAvatarMutation = useUploadAvatar()
   const changePasswordMutation = useChangePassword()
+  const deleteAccountMutation = useDeleteAccount()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(tabParam || 'profile')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Delete account modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
 
   // Profile tab fields
   const [fullName, setFullName] = useState(currentUser?.full_name || '')
@@ -170,6 +177,17 @@ export default function SettingsPage() {
       setTimeout(() => setPwdSuccessMsg(''), 4000)
     } catch (err: any) {
       setPwdErrorMsg(err.response?.data?.detail || 'Failed to change password. Please check your current password.')
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccountMutation.mutateAsync()
+      logout()
+      router.push('/login')
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || 'Failed to delete account')
+      setShowDeleteModal(false)
     }
   }
 
@@ -546,7 +564,14 @@ export default function SettingsPage() {
               <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 shadow-sm">
                 <h2 className="font-semibold text-destructive mb-2">Danger Zone</h2>
                 <p className="text-xs text-muted-foreground mb-4">Permanently remove your account and all learning records.</p>
-                <button className="px-4 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:brightness-110 transition-all flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmText('')
+                    setShowDeleteModal(true)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:brightness-110 transition-all flex items-center gap-2 shadow-sm"
+                >
                   <LogOut className="size-4" />
                   Delete Account
                 </button>
@@ -555,6 +580,64 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-destructive">
+              <div className="p-3 rounded-full bg-destructive/10">
+                <AlertTriangle className="size-6" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground">Delete Account?</h3>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              This action is permanent and cannot be undone. All your personal profile information, course enrollments, learning progress, and bookmarks will be completely deleted.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
+                Type <span className="text-destructive font-bold">{fullName || currentUser?.full_name || 'Delete My Account'}</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={`Type "${fullName || currentUser?.full_name || 'Delete My Account'}"`}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-destructive/40 text-sm font-semibold"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleteAccountMutation.isPending}
+                className="px-4 py-2.5 rounded-xl border border-border bg-card text-foreground text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={
+                  confirmText.trim().toLowerCase() !== (fullName || currentUser?.full_name || 'Delete My Account').trim().toLowerCase() ||
+                  deleteAccountMutation.isPending
+                }
+                className="px-5 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:brightness-110 transition-all disabled:opacity-50 flex items-center gap-2 shadow-md"
+              >
+                {deleteAccountMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <LogOut className="size-4" />
+                )}
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

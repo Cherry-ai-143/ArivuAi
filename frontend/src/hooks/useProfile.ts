@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateProfile, uploadAvatar, changePassword } from "@/lib/services/user.service";
+import { updateProfile, uploadAvatar, changePassword, deleteAccount } from "@/lib/services/user.service";
 import { USER_QUERY_KEY } from "./useCurrentUser";
 import type { UpdateProfileRequest, ChangePasswordRequest } from "@/types/user";
 
@@ -29,5 +29,16 @@ export function useUploadAvatar() {
 export function useChangePassword() {
   return useMutation({
     mutationFn: (data: ChangePasswordRequest) => changePassword(data),
+  });
+}
+
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => deleteAccount(),
+    onSuccess: () => {
+      queryClient.clear();
+    },
   });
 }

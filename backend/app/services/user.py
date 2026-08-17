@@ -129,3 +129,7 @@ class UserService:
         self.repository.update_avatar(current_user, avatar_url)
 
         return {"avatar_url": avatar_url}
+
+    def delete_account(self, current_user: User) -> dict:
+        self.repository.delete_user(current_user)
+        return {"message": "Account and all associated details deleted successfully."}

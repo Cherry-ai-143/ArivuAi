@@ -11,7 +11,7 @@ export type EducationLevel =
 
 export type TeacherInstitutionType =
   | "School (Class 7–10)"
-  | "Higher Secondary / PUC"
+  | "PUC / 11th–12th"
   | "Degree College"
   | "Engineering College"
   | "Coaching Institute"

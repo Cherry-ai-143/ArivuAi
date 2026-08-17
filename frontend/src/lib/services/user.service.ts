@@ -36,3 +36,8 @@ export async function changePassword(data: ChangePasswordRequest): Promise<{ mes
   const response = await apiClient.post<{ message: string }>(USER_CHANGE_PASSWORD, payload);
   return response.data;
 }
+
+export async function deleteAccount(): Promise<{ message: string }> {
+  const response = await apiClient.delete<{ message: string }>(CURRENT_USER);
+  return response.data;
+}

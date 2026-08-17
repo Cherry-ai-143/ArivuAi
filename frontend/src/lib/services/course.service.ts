@@ -38,16 +38,22 @@ export async function getCourses(params?: CourseQueryParams): Promise<PaginatedC
 
   // Use search endpoint if pagination or search params are set
   try {
-    const response = await apiClient.get<PaginatedCourseResponse>(`${COURSES}/search`, {
+    const url = `${COURSES}/search`;
+    console.log("COURSES REQUEST:", url, queryParams);
+    const response = await apiClient.get<PaginatedCourseResponse>(url, {
       params: queryParams,
     });
+    console.log("COURSES API RESPONSE:", response.data);
     return response.data;
   } catch (error) {
     // Fallback to /api/v1/courses/ if search endpoint fails
-    const response = await apiClient.get<Course[]>(`${COURSES}/`, {
+    const url = `${COURSES}/`;
+    console.log("COURSES FALLBACK REQUEST:", url, queryParams);
+    const response = await apiClient.get<Course[]>(url, {
       params: queryParams,
     });
     const items = Array.isArray(response.data) ? response.data : [];
+    console.log("COURSES FALLBACK API RESPONSE:", response.data);
     return {
       items,
       total: items.length,
