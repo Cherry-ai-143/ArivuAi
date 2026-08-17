@@ -9,6 +9,42 @@ from app.repositories.course import CourseRepository
 from app.schemas.course import CourseCreate, CourseUpdate
 
 
+def map_teacher_profile_to_target_education_level(user: User) -> str | None:
+    if user.education_level:
+        raw_edu = str(user.education_level).strip()
+        if any(k in raw_edu.lower() for k in ["school", "class 7", "class 10"]):
+            return "Higher School (Class 7–10)"
+        if any(k in raw_edu.lower() for k in ["puc", "11th", "12th", "higher secondary"]):
+            return "PUC / 11th–12th"
+        if any(k in raw_edu.lower() for k in ["diploma", "polytechnic"]):
+            return "Diploma"
+        if any(k in raw_edu.lower() for k in ["engineering", "btech", "b.tech"]):
+            return "Engineering"
+        if any(k in raw_edu.lower() for k in ["postgraduate", "mtech", "m.tech", "msc", "mba", "mca"]):
+            return "Postgraduate"
+        if any(k in raw_edu.lower() for k in ["undergraduate", "degree", "bsc", "bca", "bcom", "ba"]):
+            return "Undergraduate (Degree)"
+        if "other" in raw_edu.lower():
+            return "Other"
+
+    if user.institution_type:
+        raw_inst = str(user.institution_type).strip()
+        if any(k in raw_inst.lower() for k in ["school", "class 7", "class 10"]):
+            return "Higher School (Class 7–10)"
+        if any(k in raw_inst.lower() for k in ["puc", "11th", "12th", "higher secondary"]):
+            return "PUC / 11th–12th"
+        if "engineering" in raw_inst.lower():
+            return "Engineering"
+        if any(k in raw_inst.lower() for k in ["diploma", "polytechnic"]):
+            return "Diploma"
+        if any(k in raw_inst.lower() for k in ["degree", "undergraduate"]):
+            return "Undergraduate (Degree)"
+        if any(k in raw_inst.lower() for k in ["university", "postgraduate"]):
+            return "Postgraduate"
+
+    return None
+
+
 class CourseService:
 
     def __init__(self, db: Session):
@@ -30,6 +66,12 @@ class CourseService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only teachers and admins can create courses.",
             )
+
+        # Fallback target_education_level from teacher academic profile if unspecified
+        if not course_data.target_education_level or not course_data.target_education_level.strip():
+            teacher_target = map_teacher_profile_to_target_education_level(current_user)
+            if teacher_target:
+                course_data.target_education_level = teacher_target
 
         existing_course = self.repository.get_course_by_title(
             current_user.id,

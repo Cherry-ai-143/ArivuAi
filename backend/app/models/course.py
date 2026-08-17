@@ -112,6 +112,27 @@ class Course(Base):
     )
 
     # ------------------------------------------------------------------
+    # Academic Target Fields
+    # ------------------------------------------------------------------
+    target_education_level: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        index=True,
+    )
+    target_course: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    target_branch: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+    target_year_semester: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    # ------------------------------------------------------------------
     # Created Time
     # ------------------------------------------------------------------
     created_at: Mapped[datetime] = mapped_column(

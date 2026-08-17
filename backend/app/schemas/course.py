@@ -37,6 +37,13 @@ class CourseBase(BaseModel):
         gt=0,
     )
 
+    is_published: bool = Field(default=False)
+
+    target_education_level: Optional[str] = None
+    target_course: Optional[str] = None
+    target_branch: Optional[str] = None
+    target_year_semester: Optional[str] = None
+
 
 class CourseCreate(CourseBase):
     # purpose : Validate data required when creating a course.
@@ -73,6 +80,11 @@ class CourseUpdate(BaseModel):
     )
 
     is_published: Optional[bool] = None
+
+    target_education_level: Optional[str] = None
+    target_course: Optional[str] = None
+    target_branch: Optional[str] = None
+    target_year_semester: Optional[str] = None
 
 
 class CourseResponse(CourseBase):

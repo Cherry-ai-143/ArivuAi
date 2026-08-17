@@ -153,13 +153,16 @@ class CourseRepository:
                 text("""
                     DELETE FROM document_chunks
                     WHERE uploaded_file_id IN (
-                        SELECT uf.id
-                        FROM uploaded_files uf
-                        JOIN lessons l
-                            ON uf.lesson_id = l.id
-                        JOIN chapters c
-                            ON l.chapter_id = c.id
-                        WHERE c.course_id = :cid
+                        SELECT id
+                        FROM uploaded_files
+                        WHERE course_id = :cid
+                           OR lesson_id IN (
+                               SELECT l.id
+                               FROM lessons l
+                               JOIN chapters c
+                                   ON l.chapter_id = c.id
+                               WHERE c.course_id = :cid
+                           )
                     )
                 """),
                 {"cid": course_id},

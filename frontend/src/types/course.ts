@@ -12,6 +12,10 @@ export interface Course {
   is_published: boolean;
   created_at: string;
   updated_at: string;
+  target_education_level?: string | null;
+  target_course?: string | null;
+  target_branch?: string | null;
+  target_year_semester?: string | null;
   // Computed / Display fields
   students_count?: number;
   lessons_count?: number;
@@ -26,6 +30,10 @@ export interface CreateCourseRequest {
   level: CourseLevel;
   language: string;
   duration_hours: number;
+  target_education_level?: string | null;
+  target_course?: string | null;
+  target_branch?: string | null;
+  target_year_semester?: string | null;
 }
 
 export interface UpdateCourseRequest {
@@ -36,6 +44,10 @@ export interface UpdateCourseRequest {
   language?: string;
   duration_hours?: number;
   is_published?: boolean;
+  target_education_level?: string | null;
+  target_course?: string | null;
+  target_branch?: string | null;
+  target_year_semester?: string | null;
 }
 
 export interface CourseQueryParams {

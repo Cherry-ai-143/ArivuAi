@@ -222,6 +222,70 @@ function getTeacherSubjectOptions(currentUser: any, profileDetails: any): string
   return getSubjectOptionsForInstitution(institutionType, educationLevel)
 }
 
+export function isValidYouTubeVideoUrl(urlStr: string): boolean {
+  if (!urlStr || !urlStr.trim()) return false
+  const trimmed = urlStr.trim()
+  try {
+    const url = new URL(trimmed)
+    const hostname = url.hostname.toLowerCase()
+
+    const validHostnames = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']
+    if (!validHostnames.includes(hostname)) return false
+
+    if (hostname === 'youtu.be') {
+      const pathParts = url.pathname.split('/').filter(Boolean)
+      return pathParts.length > 0 && pathParts[0].trim().length > 0
+    }
+
+    if (url.pathname.includes('/shorts/')) {
+      const parts = url.pathname.split('/shorts/')[1]?.split('/').filter(Boolean)
+      return Boolean(parts && parts.length > 0 && parts[0].trim().length > 0)
+    }
+
+    if (url.pathname === '/watch' || url.pathname.startsWith('/watch/')) {
+      const v = url.searchParams.get('v')
+      return Boolean(v && v.trim().length > 0)
+    }
+
+    return false
+  } catch {
+    return false
+  }
+}
+
+export function isValidGitHubRepoUrl(urlStr: string): boolean {
+  if (!urlStr || !urlStr.trim()) return false
+  const trimmed = urlStr.trim()
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'https:') return false
+
+    const hostname = url.hostname.toLowerCase()
+    if (hostname !== 'github.com' && hostname !== 'www.github.com') return false
+
+    const pathSegments = url.pathname.split('/').filter(Boolean)
+    if (pathSegments.length < 2) return false
+
+    const owner = pathSegments[0].trim()
+    const repo = pathSegments[1].trim()
+
+    return owner.length > 0 && repo.length > 0
+  } catch {
+    return false
+  }
+}
+
+export function isValidExternalUrl(urlStr: string): boolean {
+  if (!urlStr || !urlStr.trim()) return false
+  const trimmed = urlStr.trim()
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 const WIZARD_STEPS = [
   { id: 1, title: 'Academic Info', subtitle: 'Tier & Subject', icon: BookOpen },
   { id: 2, title: 'Course Details', subtitle: 'Metadata & Media', icon: BookOpen },
@@ -1134,12 +1198,30 @@ const handleCourseFileUpload = async (file: File) => {
   // Handle local resource modal trigger
   const handleSelectResourceFile = (file: File) => {
     setResourceValidationError(null)
-    const allowedExtensions = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.webp']
     const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    const currentResType = resourceModalTarget?.resType
 
-    if (!allowedExtensions.includes(ext)) {
-      setResourceValidationError('Unsupported file type. Accepted: .pdf, .doc, .docx, .ppt, .pptx, .txt')
-      return
+    if (currentResType === 'Document' || currentResType === 'PDF' || currentResType === 'DOCX') {
+      if (!['.pdf', '.doc', '.docx'].includes(ext)) {
+        setResourceValidationError('Unsupported document file type. Accepted: .pdf, .doc, .docx')
+        return
+      }
+    } else if (currentResType === 'PPT') {
+      if (!['.ppt', '.pptx'].includes(ext)) {
+        setResourceValidationError('Unsupported PowerPoint file type. Accepted: .ppt, .pptx')
+        return
+      }
+    } else if (currentResType === 'TXT') {
+      if (!['.txt'].includes(ext)) {
+        setResourceValidationError('Unsupported text file type. Accepted: .txt')
+        return
+      }
+    } else {
+      const allowedExtensions = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.webp']
+      if (!allowedExtensions.includes(ext)) {
+        setResourceValidationError('Unsupported file type. Accepted: .pdf, .doc, .docx, .ppt, .pptx, .txt')
+        return
+      }
     }
 
     const maxBytes = 25 * 1024 * 1024 // 25 MB
@@ -1157,14 +1239,29 @@ const handleCourseFileUpload = async (file: File) => {
   const handleModalAddResource = async () => {
     if (!resourceModalTarget) return
     const { uIdx, cIdx, lIdx, resType } = resourceModalTarget
-    const isDocument = ['PDF', 'PPT', 'DOCX', 'TXT'].includes(resType)
+    const isDocument = ['Document', 'PDF', 'PPT', 'DOCX', 'TXT'].includes(resType)
 
     if (isDocument && !selectedResourceFile && !resourceUrl.trim()) {
       setResourceValidationError('Please select a local document file or enter a valid URL.')
       return
     }
 
-    if (!isDocument && !resourceUrl.trim()) {
+    if (resType === 'YouTube Video') {
+      if (!isValidYouTubeVideoUrl(resourceUrl)) {
+        setResourceValidationError('Please enter a valid YouTube video URL.')
+        return
+      }
+    } else if (resType === 'GitHub Repository') {
+      if (!isValidGitHubRepoUrl(resourceUrl)) {
+        setResourceValidationError('Please enter a valid GitHub repository URL.')
+        return
+      }
+    } else if (resType === 'External Link') {
+      if (!isValidExternalUrl(resourceUrl)) {
+        setResourceValidationError('Please enter a valid HTTP/HTTPS URL.')
+        return
+      }
+    } else if (!isDocument && !resourceUrl.trim()) {
       setResourceValidationError('Please enter a valid link/URL.')
       return
     }
@@ -1181,7 +1278,10 @@ const handleCourseFileUpload = async (file: File) => {
     setResourceValidationError(null)
     setIsDraggingResource(false)
 
-    await handleAttachResource(uIdx, cIdx, lIdx, fileToUse, urlToUse, titleToUse, resType)
+    // Map 'Document' to 'PDF' type for lesson resource if backend expects standard enum
+    const typeToAttach = (resType as string) === 'Document' ? 'PDF' : resType
+
+    await handleAttachResource(uIdx, cIdx, lIdx, fileToUse, urlToUse, titleToUse, typeToAttach as any)
   }
 
   // Delete Lesson Resource
@@ -1717,41 +1817,17 @@ const handleCourseFileUpload = async (file: File) => {
                                   <div className="border-t border-border/60 pt-2 space-y-2">
                                     <div className="flex items-center justify-between text-[11px]">
                                       <span className="font-semibold text-muted-foreground">Lesson Study Materials ({les.resources?.length || 0})</span>
-                                      <div className="flex items-center gap-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setResourceModalTarget({ uIdx, cIdx, lIdx, resType: 'PDF' })
-                                            setSelectedResourceFile(null)
-                                            setResourceValidationError(null)
-                                          }}
-                                          className="rounded-lg bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-1"
-                                        >
-                                          <Plus className="size-3" /> Upload PDF / Document
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setResourceModalTarget({ uIdx, cIdx, lIdx, resType: 'YouTube Video' })
-                                            setSelectedResourceFile(null)
-                                            setResourceValidationError(null)
-                                          }}
-                                          className="rounded-lg bg-rose-500/10 text-rose-600 border border-rose-500/20 px-2.5 py-1 text-[10px] font-bold hover:bg-rose-500/20 transition-all flex items-center gap-1"
-                                        >
-                                          <Plus className="size-3" /> Video
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setResourceModalTarget({ uIdx, cIdx, lIdx, resType: 'GitHub Repository' })
-                                            setSelectedResourceFile(null)
-                                            setResourceValidationError(null)
-                                          }}
-                                          className="rounded-lg bg-purple-500/10 text-purple-600 border border-purple-500/20 px-2.5 py-1 text-[10px] font-bold hover:bg-purple-500/20 transition-all flex items-center gap-1"
-                                        >
-                                          <Plus className="size-3" /> Repo
-                                        </button>
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setResourceModalTarget({ uIdx, cIdx, lIdx, resType: 'PDF' })
+                                          setSelectedResourceFile(null)
+                                          setResourceValidationError(null)
+                                        }}
+                                        className="rounded-lg bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 px-2.5 py-1 text-[10px] font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-1"
+                                      >
+                                        <Plus className="size-3" /> Add Study Material
+                                      </button>
                                     </div>
 
                                     {/* ATTACHED MATERIALS LISTING */}
@@ -2019,12 +2095,15 @@ const handleCourseFileUpload = async (file: File) => {
                 <div>
                   <label className="text-xs font-semibold text-foreground">Document / Resource Type</label>
                   <select
-                    value={resourceModalTarget.resType}
-                    onChange={(e) => setResourceModalTarget({ ...resourceModalTarget, resType: e.target.value as any })}
+                    value={resourceModalTarget.resType === 'PDF' ? 'Document' : resourceModalTarget.resType}
+                    onChange={(e) => {
+                      setResourceModalTarget({ ...resourceModalTarget, resType: e.target.value as any })
+                      setResourceValidationError(null)
+                      setSelectedResourceFile(null)
+                    }}
                     className="mt-1 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-xs font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="PDF">PDF Document (.pdf)</option>
-                    <option value="DOCX">Word Document (.docx / .doc)</option>
+                    <option value="Document">Document (.pdf, .doc, .docx)</option>
                     <option value="PPT">PowerPoint Presentation (.ppt / .pptx)</option>
                     <option value="TXT">Text File (.txt)</option>
                     <option value="YouTube Video">YouTube Video Link</option>
@@ -2034,7 +2113,7 @@ const handleCourseFileUpload = async (file: File) => {
                 </div>
 
                 {/* Drag & Drop Local File Upload Zone for Documents */}
-                {['PDF', 'DOCX', 'PPT', 'TXT'].includes(resourceModalTarget.resType) ? (
+                {['Document', 'PDF', 'DOCX', 'PPT', 'TXT'].includes(resourceModalTarget.resType) ? (
                   <div className="space-y-3">
                     <label className="text-xs font-semibold text-foreground">Local Document File Upload *</label>
 
@@ -2084,7 +2163,15 @@ const handleCourseFileUpload = async (file: File) => {
                       >
                         <input
                           type="file"
-                          accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                          accept={
+                            resourceModalTarget.resType === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
+                              ? 'application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                              : resourceModalTarget.resType === 'PPT'
+                              ? '.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                              : resourceModalTarget.resType === 'TXT'
+                              ? '.txt,text/plain'
+                              : '.pdf,.doc,.docx,.ppt,.pptx,.txt'
+                          }
                           onChange={(e) => {
                             const file = e.target.files?.[0]
                             if (file) handleSelectResourceFile(file)
@@ -2094,7 +2181,13 @@ const handleCourseFileUpload = async (file: File) => {
                         <UploadCloud className="size-8 text-primary opacity-70 mb-2" />
                         <p className="font-bold text-xs text-foreground">Drop files here or click to Browse Files</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          Supports PDF, DOCX, PPT, PPTX, TXT (Max 25 MB)
+                          {resourceModalTarget.resType === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
+                            ? 'Supports PDF, DOC, DOCX (Max 25 MB)'
+                            : resourceModalTarget.resType === 'PPT'
+                            ? 'Supports PPT, PPTX (Max 25 MB)'
+                            : resourceModalTarget.resType === 'TXT'
+                            ? 'Supports TXT (Max 25 MB)'
+                            : 'Supports PDF, DOCX, PPT, PPTX, TXT (Max 25 MB)'}
                         </p>
                       </div>
                     )}
@@ -2108,14 +2201,55 @@ const handleCourseFileUpload = async (file: File) => {
                 ) : (
                   /* URL Input for Videos / Repos / Links */
                   <div>
-                    <label className="text-xs font-semibold text-foreground">URL / Web Link *</label>
+                    <label className="text-xs font-semibold text-foreground">
+                      {resourceModalTarget.resType === 'YouTube Video'
+                        ? 'YouTube Video URL *'
+                        : resourceModalTarget.resType === 'GitHub Repository'
+                        ? 'GitHub Repository URL *'
+                        : 'External Reference URL *'}
+                    </label>
                     <input
                       type="text"
                       value={resourceUrl}
-                      onChange={(e) => setResourceUrl(e.target.value)}
-                      placeholder="https://..."
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setResourceUrl(val)
+                        if (resourceModalTarget.resType === 'YouTube Video') {
+                          if (val.trim() && !isValidYouTubeVideoUrl(val)) {
+                            setResourceValidationError('Please enter a valid YouTube video URL.')
+                          } else {
+                            setResourceValidationError(null)
+                          }
+                        } else if (resourceModalTarget.resType === 'GitHub Repository') {
+                          if (val.trim() && !isValidGitHubRepoUrl(val)) {
+                            setResourceValidationError('Please enter a valid GitHub repository URL.')
+                          } else {
+                            setResourceValidationError(null)
+                          }
+                        } else if (resourceModalTarget.resType === 'External Link') {
+                          if (val.trim() && !isValidExternalUrl(val)) {
+                            setResourceValidationError('Please enter a valid HTTP/HTTPS URL.')
+                          } else {
+                            setResourceValidationError(null)
+                          }
+                        } else {
+                          setResourceValidationError(null)
+                        }
+                      }}
+                      placeholder={
+                        resourceModalTarget.resType === 'YouTube Video'
+                          ? 'https://www.youtube.com/watch?v=...'
+                          : resourceModalTarget.resType === 'GitHub Repository'
+                          ? 'https://github.com/owner/repository'
+                          : 'https://...'
+                      }
                       className="mt-1 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
+                    {resourceValidationError && (
+                      <p className="mt-1.5 text-xs font-semibold text-destructive flex items-center gap-1">
+                        <AlertCircle className="size-3.5" /> {resourceValidationError}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -2135,7 +2269,15 @@ const handleCourseFileUpload = async (file: File) => {
                 <button
                   type="button"
                   onClick={handleModalAddResource}
-                  disabled={isUploadingResourceModal}
+                  disabled={
+                    isUploadingResourceModal ||
+                    Boolean(
+                      resourceValidationError ||
+                        (resourceModalTarget.resType === 'YouTube Video' && (!resourceUrl.trim() || !isValidYouTubeVideoUrl(resourceUrl))) ||
+                        (resourceModalTarget.resType === 'GitHub Repository' && (!resourceUrl.trim() || !isValidGitHubRepoUrl(resourceUrl))) ||
+                        (resourceModalTarget.resType === 'External Link' && (!resourceUrl.trim() || !isValidExternalUrl(resourceUrl)))
+                    )
+                  }
                   className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-primary-foreground shadow-md hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {isUploadingResourceModal ? <Loader2 className="size-3.5 animate-spin" /> : null} Upload Material

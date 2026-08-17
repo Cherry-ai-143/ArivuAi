@@ -37,7 +37,10 @@ def get_current_user(
 
     repository = UserRepository(db)
 
-    user = repository.get_user_by_email(email)
+    sub_str = str(email)
+    user = repository.get_user_by_email(sub_str)
+    if user is None and sub_str.isdigit():
+        user = repository.get_user_by_id(int(sub_str))
 
     if user is None:
         raise HTTPException(
@@ -58,10 +61,14 @@ def get_optional_current_user(
         payload = decode_access_token(token)
         if not payload:
             return None
-        email = payload.get("sub")
-        if not email:
+        sub = payload.get("sub")
+        if not sub:
             return None
         repository = UserRepository(db)
-        return repository.get_user_by_email(email)
+        sub_str = str(sub)
+        user = repository.get_user_by_email(sub_str)
+        if user is None and sub_str.isdigit():
+            user = repository.get_user_by_id(int(sub_str))
+        return user
     except Exception:
         return None

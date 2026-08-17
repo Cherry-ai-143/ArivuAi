@@ -1,5 +1,7 @@
 # purpose : Define course API endpoints for creating, reading, searching, updating, and deleting courses.
 
+import re
+
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
@@ -96,6 +98,31 @@ def search_courses(
         query = query.where(
             Course.teacher_id == current_user.id
         )
+
+    # purpose : Filter courses by academic target profile for students.
+    elif role_name in ["STUDENT", "STUDENT_ROLE"] and current_user:
+
+        if current_user.education_level:
+            std_edu = current_user.education_level
+            alt_edu = std_edu.replace("–", "-") if "–" in std_edu else std_edu.replace("-", "–")
+
+            allowed_targets = {std_edu, alt_edu}
+
+            if any(k in std_edu.lower() for k in ["puc", "11th", "12th", "higher secondary"]):
+                allowed_targets.update([
+                    "PUC / 11th–12th",
+                    "PUC / 11th-12th",
+                    "Higher Secondary / PUC",
+                ])
+            elif any(k in std_edu.lower() for k in ["school", "class 7", "class 10"]):
+                allowed_targets.update([
+                    "Higher School (Class 7–10)",
+                    "Higher School (Class 7-10)",
+                    "School (Class 7–10)",
+                    "School (Class 7-10)",
+                ])
+
+            query = query.where(Course.target_education_level.in_(list(allowed_targets)))
 
     # purpose : Filter courses by course level.
     if level:
@@ -214,6 +241,18 @@ def create_course(
     current_user: User = Depends(get_current_user),
 ):
     # purpose : Create a new course for the authenticated teacher.
+    print(
+        "COURSE CREATE DEBUG:",
+        {
+            "teacher_id": current_user.id,
+            "teacher_education_level": current_user.education_level or current_user.institution_type,
+            "course_title": course_data.title,
+            "target_education_level": course_data.target_education_level,
+            "target_course": course_data.target_course,
+            "target_branch": course_data.target_branch,
+            "target_year_semester": course_data.target_year_semester,
+        },
+    )
     service = CourseService(db)
 
     return service.create_course(
@@ -276,6 +315,91 @@ def get_all_courses(
         query = query.where(
             Course.teacher_id == current_user.id
         )
+
+    # purpose : Filter courses by academic target profile for students.
+    elif role_name in ["STUDENT", "STUDENT_ROLE"] and current_user:
+
+        if current_user.education_level:
+            std_edu = current_user.education_level
+            alt_edu = std_edu.replace("–", "-") if "–" in std_edu else std_edu.replace("-", "–")
+
+            edu_conds = [
+                Course.target_education_level == std_edu,
+                Course.target_education_level == alt_edu,
+                Course.target_education_level.is_(None),
+            ]
+
+            if any(k in std_edu.lower() for k in ["puc", "11th", "12th", "higher secondary"]):
+                edu_conds.extend([
+                    Course.target_education_level == "PUC / 11th–12th",
+                    Course.target_education_level == "PUC / 11th-12th",
+                    Course.target_education_level == "Higher Secondary / PUC",
+                ])
+            elif any(k in std_edu.lower() for k in ["school", "class 7", "class 10"]):
+                edu_conds.extend([
+                    Course.target_education_level == "Higher School (Class 7–10)",
+                    Course.target_education_level == "Higher School (Class 7-10)",
+                    Course.target_education_level == "School (Class 7–10)",
+                    Course.target_education_level == "School (Class 7-10)",
+                ])
+            elif "engineering" in std_edu.lower():
+                edu_conds.extend([
+                    Course.target_education_level == "Engineering",
+                ])
+
+            query = query.where(or_(*edu_conds))
+
+            if current_user.semester:
+                sem_str = current_user.semester
+                digits = re.sub(r"\D", "", sem_str)
+                sem_conditions = [
+                    Course.target_year_semester.is_(None),
+                    Course.target_year_semester == "",
+                    Course.target_year_semester == sem_str,
+                    Course.target_year_semester.ilike(f"%{sem_str}%"),
+                ]
+                if digits:
+                    sem_conditions.append(Course.target_year_semester.ilike(f"%{digits}%"))
+                query = query.where(or_(*sem_conditions))
+
+            if current_user.course:
+                course_str = current_user.course
+                board_match = re.search(r"\b(CBSE|ICSE|State|IB)\b", course_str, re.IGNORECASE)
+                board_kw = board_match.group(1) if board_match else None
+                course_conds = [
+                    Course.target_course.is_(None),
+                    Course.target_course == "",
+                    Course.target_course == course_str,
+                    Course.target_course.ilike(f"%{course_str}%"),
+                ]
+                if board_kw:
+                    course_conds.append(Course.target_course.ilike(f"%{board_kw}%"))
+                if std_edu and ("School" in std_edu or "PUC" in std_edu):
+                    course_conds.append(Course.target_education_level == std_edu)
+                    course_conds.append(Course.target_education_level == alt_edu)
+
+                query = query.where(or_(*course_conds))
+
+            if current_user.branch:
+                query = query.where(
+                    or_(
+                        Course.target_branch.is_(None),
+                        Course.target_branch == "",
+                        Course.target_branch.ilike("General"),
+                        Course.target_branch.ilike("Other"),
+                        Course.target_branch == current_user.branch,
+                        Course.target_branch.ilike(f"%{current_user.branch}%"),
+                    )
+                )
+            else:
+                query = query.where(
+                    or_(
+                        Course.target_branch.is_(None),
+                        Course.target_branch == "",
+                        Course.target_branch.ilike("General"),
+                        Course.target_branch.ilike("Other"),
+                    )
+                )
 
     # purpose : Filter courses by course level.
     if level:

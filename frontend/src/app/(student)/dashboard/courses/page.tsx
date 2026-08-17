@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   BookOpen,
@@ -25,6 +25,7 @@ import {
   CourseEnrollmentResponse,
 } from '@/lib/services/enrollment.service'
 import { getCourseProgress } from '@/lib/services/progress.service'
+import { useAuth } from '@/hooks/useAuth'
 import { useQueryClient } from '@tanstack/react-query'
 
 const THUMBNAIL_GRADIENTS = [
@@ -45,6 +46,7 @@ export default function StudentCoursesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const { currentUser } = useAuth()
   const initialTab = searchParams.get('tab') === 'my-learning' ? 'my-learning' : 'explore'
 
   const [activeTab, setActiveTab] = useState<'explore' | 'my-learning'>(initialTab)
@@ -56,11 +58,38 @@ export default function StudentCoursesPage() {
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('ALL')
 
+  const currentFetchUserIdRef = useRef<number | null>(null)
+
   const fetchBackendCourses = async () => {
+    if (!currentUser) return
+    const fetchUserId = currentUser.id
+    currentFetchUserIdRef.current = fetchUserId
+
     try {
       setIsLoading(true)
+      setCourses([]) // Clear old user's courses state
 
-      const res = await getCourses()
+      console.log('[COURSES] currentUser:', currentUser)
+      console.log('[COURSES] currentUser id:', currentUser?.id)
+      console.log('[COURSES] currentUser education:', currentUser?.education_level)
+      console.log('[COURSES] fetching courses for user:', fetchUserId)
+
+      const res = await getCourses({ page_size: 100 })
+
+      if (currentFetchUserIdRef.current !== fetchUserId) {
+        console.log('[COURSES] Discarding stale response for user:', fetchUserId)
+        return
+      }
+
+      console.log(
+        '[COURSES] API IDs:',
+        res.items?.map((c) => ({
+          id: c.id,
+          title: c.title,
+          target: c.target_education_level,
+        }))
+      )
+
       const allBackendCourses = res.items || []
       const publishedCourses = allBackendCourses.filter(
         (c: Course) => c.is_published === true
@@ -71,9 +100,12 @@ export default function StudentCoursesPage() {
       const enrolledMap = new Map<number, CourseEnrollmentResponse>()
       enrollments.forEach((e) => enrolledMap.set(e.course_id, e))
 
+      if (currentFetchUserIdRef.current !== fetchUserId) return
+
       // 3. Map course progress & meta
       const enriched: CourseWithMeta[] = []
       for (const course of publishedCourses) {
+        if (currentFetchUserIdRef.current !== fetchUserId) return
         const enc = enrolledMap.get(course.id)
         const isEnrolled = Boolean(enc)
         let progPct = 0
@@ -100,17 +132,22 @@ export default function StudentCoursesPage() {
         })
       }
 
-      setCourses(enriched)
+      if (currentFetchUserIdRef.current === fetchUserId) {
+        setCourses(enriched)
+      }
     } catch (err) {
       console.error('Failed fetching published backend courses:', err)
     } finally {
-      setIsLoading(false)
+      if (currentFetchUserIdRef.current === fetchUserId) {
+        setIsLoading(false)
+      }
     }
   }
 
   useEffect(() => {
+    if (!currentUser) return
     fetchBackendCourses()
-  }, [])
+  }, [currentUser?.id, currentUser?.education_level])
 
   // Handle Enrollment
   const handleEnroll = async (courseId: number) => {
