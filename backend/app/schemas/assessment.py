@@ -40,6 +40,7 @@ class AssessmentCreate(BaseModel):
     description: str | None = None
     assessment_type: AssessmentType = AssessmentType.QUIZ
     scope: AssessmentScope = AssessmentScope.LESSON
+    status: AssessmentStatus = AssessmentStatus.DRAFT
     course_id: int
     chapter_id: int | None = None
     lesson_id: int | None = None
@@ -67,6 +68,7 @@ class AssessmentUpdate(BaseModel):
     description: str | None = None
     assessment_type: AssessmentType | None = None
     scope: AssessmentScope | None = None
+    status: AssessmentStatus | None = None
     course_id: int | None = None
     chapter_id: int | None = None
     lesson_id: int | None = None
@@ -116,7 +118,7 @@ class AssessmentResponse(BaseModel):
 
 
 # ----------------------------------------
-# Published Assessment for Student (Lesson Completion Flow)
+# Published Assessment for Student
 # ----------------------------------------
 class PublishedAssessmentResponse(BaseModel):
     id: int
@@ -127,9 +129,41 @@ class PublishedAssessmentResponse(BaseModel):
     duration_minutes: int
     passing_score: int
     max_attempts: int
+    course_id: int | None = None
+    course_title: str | None = None
+    created_at: datetime | None = None
     question_count: int = 0
     total_marks: int = 0
     attempts_used: int = 0
     attempts_remaining: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ----------------------------------------
+# Secure Student Test-Taking Schemas (No Answers Leaked)
+# ----------------------------------------
+class StudentTakeQuestionResponse(BaseModel):
+    question_id: int
+    order_number: int
+    marks: int
+    question_text: str
+    question_type: str
+    option_a: str | None = None
+    option_b: str | None = None
+    option_c: str | None = None
+    option_d: str | None = None
+
+
+class StudentTakeAssessmentResponse(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    assessment_type: AssessmentType
+    scope: AssessmentScope
+    duration_minutes: int
+    passing_score: int
+    max_attempts: int
+    total_marks: int
+    question_count: int
+    questions: list[StudentTakeQuestionResponse]

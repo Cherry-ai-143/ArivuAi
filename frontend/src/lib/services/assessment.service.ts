@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api/axios'
-import { ASSESSMENTS } from '@/lib/api/endpoints'
+import { ASSESSMENTS, ASSESSMENT_ATTEMPTS } from '@/lib/api/endpoints'
 import type {
   Assessment,
   AssessmentCreateRequest,
@@ -7,6 +7,9 @@ import type {
   AssessmentStatus,
   AssessmentStatusUpdateRequest,
   PublishedAssessment,
+  StudentTakeAssessment,
+  AssessmentAttempt,
+  AssessmentSubmitResponse,
 } from '@/types/assessment'
 
 export interface AssessmentListParams {
@@ -77,3 +80,40 @@ export async function getPublishedAssessmentForLesson(
   )
   return response.data
 }
+
+export async function getAvailableStudentAssessments(): Promise<PublishedAssessment[]> {
+  const response = await apiClient.get<PublishedAssessment[]>(
+    `${ASSESSMENTS}/student/available`
+  )
+  return response.data || []
+}
+
+export async function getStudentTakeAssessment(
+  assessmentId: number
+): Promise<StudentTakeAssessment> {
+  const response = await apiClient.get<StudentTakeAssessment>(
+    `${ASSESSMENTS}/${assessmentId}/take`
+  )
+  return response.data
+}
+
+export async function startAssessmentAttempt(
+  assessmentId: number
+): Promise<AssessmentAttempt> {
+  const response = await apiClient.post<AssessmentAttempt>(
+    `${ASSESSMENT_ATTEMPTS}/`,
+    { assessment_id: assessmentId }
+  )
+  return response.data
+}
+
+export async function submitAssessmentAttempt(
+  attemptId: number,
+  answers: { question_id: number; selected_option: string }[]
+): Promise<AssessmentSubmitResponse> {
+  const response = await apiClient.put<AssessmentSubmitResponse>(
+    `${ASSESSMENT_ATTEMPTS}/${attemptId}/submit`,
+    { answers }
+  )
+  return response.data
+}

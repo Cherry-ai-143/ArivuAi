@@ -39,6 +39,7 @@ import {
 import { QuestionModal } from "@/components/teacher/questions/question-modal";
 import { QuestionPreviewModal } from "@/components/teacher/questions/question-preview-modal";
 import { AiQuizGeneratorModal } from "@/components/teacher/quizzes/ai-quiz-generator-modal";
+import { CreateAssessmentDialog } from "@/components/teacher/assessments/create-assessment-dialog";
 import type { Question, QuestionSearchQueryParams } from "@/types/question";
 import type { Course } from "@/types/course";
 import type { Chapter } from "@/types/chapter";
@@ -80,6 +81,7 @@ export default function ContextAwareQuestionBankPage() {
   }>({ isOpen: false, question: null });
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isCreateAssessmentOpen, setIsCreateAssessmentOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // --- ACADEMIC CONTEXT DATA FETCHING ---
@@ -476,14 +478,21 @@ export default function ContextAwareQuestionBankPage() {
             </span>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setIsCreateAssessmentOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold hover:brightness-110 transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus className="size-3.5" />
+                Create Assessment from Selected ({selectedQuestionIds.size})
+              </button>
+              <button
                 onClick={handleBulkApprove}
-                className="px-3 py-1 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors"
               >
                 Approve Selected
               </button>
               <button
                 onClick={handleBulkArchive}
-                className="px-3 py-1 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 transition-colors"
               >
                 Archive Selected
               </button>
@@ -767,6 +776,21 @@ export default function ContextAwareQuestionBankPage() {
           onSuccess={() => {
             showToast("success", "AI questions approved and saved to Question Bank.");
             refetchQuestions();
+          }}
+        />
+      )}
+
+      {isCreateAssessmentOpen && (
+        <CreateAssessmentDialog
+          open={isCreateAssessmentOpen}
+          onOpenChange={setIsCreateAssessmentOpen}
+          initialSelectedQuestionIds={Array.from(selectedQuestionIds)}
+          initialCourseId={selectedCourseId}
+          initialChapterId={selectedChapterId}
+          initialLessonId={selectedLessonId}
+          onCreated={() => {
+            showToast("success", "Assessment created and saved successfully.");
+            setSelectedQuestionIds(new Set());
           }}
         />
       )}

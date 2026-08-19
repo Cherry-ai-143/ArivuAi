@@ -10,6 +10,7 @@ from app.schemas.assessment import (
     AssessmentStatusUpdate,
     AssessmentResponse,
     PublishedAssessmentResponse,
+    StudentTakeAssessmentResponse,
 )
 from app.services.assessment import AssessmentService
 
@@ -44,6 +45,16 @@ def get_assessments(
     )
 
 
+@router.get("/student/available", response_model=list[PublishedAssessmentResponse])
+def get_available_student_assessments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch all published assessments for courses where current student is actively enrolled."""
+    service = AssessmentService(db)
+    return service.get_available_assessments_for_student(current_user)
+
+
 @router.get("/published/lesson/{lesson_id}", response_model=PublishedAssessmentResponse | None)
 def get_published_assessment_for_lesson(
     lesson_id: int,
@@ -56,6 +67,19 @@ def get_published_assessment_for_lesson(
     """
     service = AssessmentService(db)
     return service.get_published_assessment_for_lesson(lesson_id, current_user)
+
+
+@router.get("/{assessment_id}/take", response_model=StudentTakeAssessmentResponse)
+def take_assessment(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fetch assessment questions securely for taking a test.
+    Strips correct_option, correct_answer, explanation, AI fields.
+    """
+    service = AssessmentService(db)
+    return service.get_assessment_for_student_take(assessment_id, current_user)
 
 
 @router.get("/{assessment_id}", response_model=AssessmentResponse)
@@ -101,4 +125,4 @@ def delete_assessment(
 ):
     """Delete an assessment."""
     service = AssessmentService(db)
-    return service.delete_assessment(assessment_id, current_user)
+    return service.delete_assessment(assessment_id, current_user)

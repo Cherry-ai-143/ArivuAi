@@ -6,6 +6,8 @@ from app.models.user import User
 from app.schemas.assessment_attempt import (
     AssessmentAttemptCreate,
     AssessmentAttemptResponse,
+    AssessmentSubmitRequest,
+    AssessmentSubmitResponse,
 )
 from app.services.assessment_attempt import AssessmentAttemptService
 
@@ -77,19 +79,22 @@ def get_attempt(
 
 @router.put(
     "/{attempt_id}/submit",
-    response_model=AssessmentAttemptResponse,
+    response_model=AssessmentSubmitResponse,
 )
 def submit_attempt(
     attempt_id: int,
+    payload: AssessmentSubmitRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AssessmentAttemptService(db)
 
-    return service.submit_attempt(
+    return service.submit_attempt_with_answers(
         attempt_id,
+        payload,
         current_user,
     )
+
 
 
 @router.delete(

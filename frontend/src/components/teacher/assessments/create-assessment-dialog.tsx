@@ -38,11 +38,15 @@ import type { Lesson } from "@/types/lesson";
 import { QuestionPreviewModal } from "@/components/teacher/questions/question-preview-modal";
 
 interface CreateAssessmentDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   isOpen?: boolean;
   onClose?: () => void;
   onCreated?: () => void;
+  initialSelectedQuestionIds?: number[];
+  initialCourseId?: number | null;
+  initialChapterId?: number | null;
+  initialLessonId?: number | null;
 }
 
 const STEPS = ["Details", "Select Questions", "Settings", "Review & Publish"];
@@ -62,11 +66,15 @@ const ASSESSMENT_SCOPES: { value: AssessmentScope; label: string }[] = [
 ];
 
 export function CreateAssessmentDialog({
-  open,
+  open = false,
   onOpenChange,
   isOpen,
   onClose,
   onCreated,
+  initialSelectedQuestionIds,
+  initialCourseId,
+  initialChapterId,
+  initialLessonId,
 }: CreateAssessmentDialogProps) {
   const isActuallyOpen = isOpen ?? open;
   const handleClose = () => {
@@ -110,14 +118,21 @@ export function CreateAssessmentDialog({
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
-  // Load courses on mount
+  // Load courses & sync initial props on mount/open
   useEffect(() => {
     if (isActuallyOpen) {
       getCourses()
         .then((data) => setCourses(data.items ?? []))
         .catch(() => setCourses([]));
+
+      if (initialSelectedQuestionIds && initialSelectedQuestionIds.length > 0) {
+        setSelectedQuestionIds(initialSelectedQuestionIds);
+      }
+      if (initialCourseId) setCourseId(initialCourseId);
+      if (initialChapterId) setChapterId(initialChapterId);
+      if (initialLessonId) setLessonId(initialLessonId);
     }
-  }, [isActuallyOpen]);
+  }, [isActuallyOpen, initialSelectedQuestionIds, initialCourseId, initialChapterId, initialLessonId]);
 
   // Load chapters when course changes
   useEffect(() => {
@@ -128,8 +143,6 @@ export function CreateAssessmentDialog({
     } else {
       setChapters([]);
     }
-    setChapterId("");
-    setLessonId("");
   }, [courseId]);
 
   // Load lessons when chapter changes
@@ -141,7 +154,6 @@ export function CreateAssessmentDialog({
     } else {
       setLessons([]);
     }
-    setLessonId("");
   }, [chapterId]);
 
   // Load questions for picker
@@ -205,6 +217,7 @@ export function CreateAssessmentDialog({
     description: description || null,
     assessment_type: assessmentType,
     scope,
+    status,
     course_id: Number(courseId),
     chapter_id: chapterId ? Number(chapterId) : null,
     lesson_id: lessonId ? Number(lessonId) : null,
@@ -225,14 +238,6 @@ export function CreateAssessmentDialog({
     try {
       const payload = buildPayload(status);
       await createAssessment(payload);
-      // After creating, update status if PUBLISHED
-      if (status === "PUBLISHED") {
-        // createAssessment creates as DRAFT by default; we need to publish
-        // The backend create uses default DRAFT, so we patch status separately
-        // But we don't have the id here. Instead, we'll rely on the backend
-        // to accept status in create. For now, create then the card action
-        // can publish. Alternatively, we can modify create to accept status.
-      }
       onCreated?.();
       resetForm();
       handleClose();

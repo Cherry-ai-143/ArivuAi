@@ -46,6 +46,7 @@ export interface AssessmentCreateRequest {
   description?: string | null;
   assessment_type: AssessmentType;
   scope: AssessmentScope;
+  status?: AssessmentStatus;
   course_id: number;
   chapter_id?: number | null;
   lesson_id?: number | null;
@@ -63,6 +64,7 @@ export interface AssessmentUpdateRequest {
   description?: string | null;
   assessment_type?: AssessmentType;
   scope?: AssessmentScope;
+  status?: AssessmentStatus;
   course_id?: number;
   chapter_id?: number | null;
   lesson_id?: number | null;
@@ -88,8 +90,68 @@ export interface PublishedAssessment {
   duration_minutes: number;
   passing_score: number;
   max_attempts: number;
+  course_id?: number;
+  course_title?: string;
+  created_at?: string;
   question_count: number;
   total_marks: number;
   attempts_used: number;
   attempts_remaining: number;
 }
+
+export interface StudentTakeQuestion {
+  question_id: number;
+  order_number: number;
+  marks: number;
+  question_text: string;
+  question_type: string;
+  option_a?: string | null;
+  option_b?: string | null;
+  option_c?: string | null;
+  option_d?: string | null;
+}
+
+export interface StudentTakeAssessment {
+  id: number;
+  title: string;
+  description?: string | null;
+  assessment_type: AssessmentType;
+  scope: AssessmentScope;
+  duration_minutes: number;
+  passing_score: number;
+  max_attempts: number;
+  total_marks: number;
+  question_count: number;
+  questions: StudentTakeQuestion[];
+}
+
+export interface AssessmentAttempt {
+  id: number;
+  assessment_id: number;
+  student_id: number;
+  status: "IN_PROGRESS" | "SUBMITTED";
+  score?: number | null;
+  started_at: string;
+  submitted_at?: string | null;
+}
+
+export interface AssessmentSubmitRequest {
+  answers: {
+    question_id: number;
+    selected_option: string;
+  }[];
+}
+
+export interface AssessmentSubmitResponse {
+  attempt_id: number;
+  assessment_id: number;
+  status: "SUBMITTED";
+  score: number;
+  total_marks: number;
+  percentage: number;
+  passed: boolean;
+  correct_count: number;
+  incorrect_count: number;
+  total_questions: number;
+  submitted_at: string;
+}

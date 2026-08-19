@@ -31,3 +31,26 @@ class AssessmentAttemptUpdate(BaseModel):
     status: AttemptStatus | None = None
     score: int | None = None
     submitted_at: datetime | None = None
+
+
+class StudentSubmitAnswerItem(BaseModel):
+    question_id: int
+    selected_option: str
+
+
+class AssessmentSubmitRequest(BaseModel):
+    answers: list[StudentSubmitAnswerItem] = []
+
+
+class AssessmentSubmitResponse(BaseModel):
+    attempt_id: int
+    assessment_id: int
+    status: AttemptStatus
+    score: int
+    total_marks: int
+    percentage: float
+    passed: bool
+    correct_count: int
+    incorrect_count: int
+    total_questions: int
+    submitted_at: datetime

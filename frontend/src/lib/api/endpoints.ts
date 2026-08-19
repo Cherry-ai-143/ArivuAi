@@ -22,6 +22,7 @@ export const CHAPTERS = "/chapters";
 export const LESSONS = "/lessons";
 export const QUESTIONS = "/questions";
 export const ASSESSMENTS = "/assessments";
+export const ASSESSMENT_ATTEMPTS = "/assessment-attempts";
 export const AI = "/ai";
 export const UPLOADS = "/uploads";
 export const ANALYTICS = "/analytics";
