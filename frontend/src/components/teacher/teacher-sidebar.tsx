@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSidebar } from '@/context/sidebar-context'
 import {
   LayoutDashboard,
   BookOpen,
@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/landing/brand-logo'
+
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/teacher-dashboard' },
@@ -77,7 +78,7 @@ const navItems = [
 
 export function TeacherSidebar() {
   const pathname = usePathname()
-  const [isExpanded, setIsExpanded] = useState(true)
+  const { isExpanded, toggleSidebar, sidebarWidth } = useSidebar()
 
   const sectionGroups = [
     {
@@ -100,11 +101,12 @@ export function TeacherSidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-primary via-primary to-primary/95 transition-all duration-300 flex flex-col overflow-hidden ${isExpanded ? 'w-64' : 'w-20'
-        }`}
+      style={{ width: sidebarWidth }}
+      className="fixed left-0 top-0 z-30 h-screen bg-gradient-to-b from-primary via-primary to-primary/95 transition-all duration-300 flex flex-col overflow-hidden"
     >
+
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-primary/30 px-6 py-5">
+      <div className={`flex items-center ${isExpanded ? 'justify-between px-6' : 'justify-center px-2'} border-b border-primary/30 py-5`}>
         {isExpanded && (
           <Link href="/" className="flex items-center gap-3">
             <BrandLogo size="sm" />
@@ -117,11 +119,13 @@ export function TeacherSidebar() {
           </Link>
         )}
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-primary-foreground/60 hover:text-primary-foreground transition-colors"
+          type="button"
+          onClick={toggleSidebar}
+          className="text-primary-foreground/60 hover:text-primary-foreground transition-colors p-1.5 rounded-lg hover:bg-primary-foreground/10"
+          title={isExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
         >
           <ChevronDown
-            className={`size-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            className={`size-5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : '-rotate-90'}`}
           />
         </button>
       </div>
@@ -153,10 +157,14 @@ export function TeacherSidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
-                      ? 'bg-accent text-accent-foreground shadow-lg'
-                      : 'text-primary-foreground/80 hover:bg-primary-foreground/10'
-                      }`}
+                    title={!isExpanded ? item.label : undefined}
+                    className={`group flex items-center ${
+                      isExpanded ? 'gap-3 px-4' : 'justify-center px-2'
+                    } rounded-xl py-3 text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-accent text-accent-foreground shadow-lg'
+                        : 'text-primary-foreground/80 hover:bg-primary-foreground/10'
+                    }`}
                   >
                     <Icon className="size-5 flex-shrink-0" />
                     {isExpanded && <span className="truncate">{item.label}</span>}
@@ -167,6 +175,7 @@ export function TeacherSidebar() {
           </div>
         ))}
       </nav>
+
 
       {/* Bottom Section */}
       {isExpanded && (

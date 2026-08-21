@@ -15,6 +15,9 @@ export function ProfileCompletionWidget() {
     [currentUser, profileDetails]
   )
 
+  const isTeacher = currentUser?.role === 'teacher'
+  const profileEditUrl = isTeacher ? '/teacher-dashboard/profile?edit=true' : '/dashboard/profile?edit=true'
+
   if (completion.percentage >= 100) {
     return null
   }
@@ -47,7 +50,7 @@ export function ProfileCompletionWidget() {
             {completion.missingItems.map((item) => (
               <Link
                 key={item.key}
-                href="/dashboard/profile?edit=true"
+                href={profileEditUrl}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/50 transition-colors"
               >
                 <Circle className="size-3 text-accent" />
@@ -60,7 +63,7 @@ export function ProfileCompletionWidget() {
 
       <div className="pt-1 flex justify-end">
         <Link
-          href="/dashboard/profile?edit=true"
+          href={profileEditUrl}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
         >
           Complete Profile

@@ -21,19 +21,29 @@ export interface AssessmentListParams {
 export async function getAssessments(
   params?: AssessmentListParams
 ): Promise<Assessment[]> {
-  const response = await apiClient.get<Assessment[]>(`${ASSESSMENTS}/`, {
-    params,
-  })
-  return response.data || []
+  try {
+    const response = await apiClient.get<Assessment[]>(`${ASSESSMENTS}/`, {
+      params,
+    })
+    return response.data || []
+  } catch (err) {
+    console.error("Failed to fetch assessments:", err)
+    return []
+  }
 }
 
 export async function getAllAssessments(courseId?: number): Promise<Assessment[]> {
-  const response = await apiClient.get<Assessment[]>(`${ASSESSMENTS}/`)
-  const assessments = response.data || []
-  if (courseId && courseId > 0) {
-    return assessments.filter((a) => a.course_id === courseId)
+  try {
+    const response = await apiClient.get<Assessment[]>(`${ASSESSMENTS}/`)
+    const assessments = response.data || []
+    if (courseId && courseId > 0) {
+      return assessments.filter((a) => a.course_id === courseId)
+    }
+    return assessments
+  } catch (err) {
+    console.error("Failed to fetch all assessments:", err)
+    return []
   }
-  return assessments
 }
 
 export async function getAssessmentById(id: number): Promise<Assessment> {
@@ -71,6 +81,29 @@ export async function updateAssessmentStatus(
 export async function deleteAssessment(id: number): Promise<void> {
   await apiClient.delete(`${ASSESSMENTS}/${id}`)
 }
+
+export async function duplicateAssessment(id: number): Promise<Assessment> {
+  const original = await getAssessmentById(id)
+  const duplicatePayload: AssessmentCreateRequest = {
+    title: `${original.title} (Copy)`,
+    description: original.description,
+    assessment_type: original.assessment_type,
+    scope: original.scope,
+    status: 'DRAFT',
+    course_id: original.course_id,
+    chapter_id: original.chapter_id,
+    lesson_id: original.lesson_id,
+    duration_minutes: original.duration_minutes,
+    passing_score: original.passing_score,
+    max_attempts: original.max_attempts,
+    shuffle_questions: original.shuffle_questions,
+    shuffle_options: original.shuffle_options,
+    show_correct_answers: original.show_correct_answers,
+    question_ids: original.assessment_questions?.map((aq) => aq.question_id || aq.id) || [],
+  }
+  return createAssessment(duplicatePayload)
+}
+
 
 export async function getPublishedAssessmentForLesson(
   lessonId: number

@@ -46,4 +46,17 @@ export const queryKeys = {
     search: (query: string) =>
       ["questions", "search", query] as const,
   },
-};
+
+  assignments: {
+    all: ["assignments"] as const,
+    list: (filters?: Record<string, unknown>) => ["assignments", "list", filters] as const,
+    detail: (id: number | string) => ["assignments", "detail", id] as const,
+    stats: ["assignments", "stats"] as const,
+    submissions: (assignmentId: number | string) => ["assignments", "submissions", assignmentId] as const,
+    mySubmission: (assignmentId: number | string) => ["assignments", "mySubmission", assignmentId] as const,
+  },
+
+  submissions: {
+    detail: (id: number | string) => ["submissions", "detail", id] as const,
+  },
+};

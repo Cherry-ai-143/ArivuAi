@@ -205,14 +205,8 @@ export function AiQuizGeneratorModal({
   const [bloomLevel, setBloomLevel] = useState<BloomLevel>("Understanding");
 
   // Topic Coverage State
-  const [availableTopics] = useState<string[]>([
-    "Variables & Data Types",
-    "Control Flow & Loops",
-    "Functions & Scope",
-    "File Handling & I/O",
-    "Exception Handling",
-  ]);
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set(availableTopics));
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
 
   // Selected Resources State
   const [selectedResourceIds, setSelectedResourceIds] = useState<Set<string>>(new Set());
@@ -244,6 +238,37 @@ export function AiQuizGeneratorModal({
       if (discoveryData.has_pdf && !discoveryData.has_youtube) {
         setSourceType("pdf");
       }
+
+      // Dynamically derive topic coverage from discovered lesson resources & chapters
+      const derived: string[] = [];
+      if ((discoveryData as any).topics && Array.isArray((discoveryData as any).topics)) {
+        derived.push(...(discoveryData as any).topics);
+      }
+
+      discoveryData.resources.forEach((r) => {
+        if (r.chapters && r.chapters.length > 0) {
+          r.chapters.forEach((ch) => {
+            if (ch.title && !derived.includes(ch.title)) {
+              derived.push(ch.title);
+            }
+          });
+        }
+      });
+
+      if (derived.length === 0) {
+        discoveryData.resources.forEach((r) => {
+          if (r.title && !derived.includes(r.title)) {
+            derived.push(r.title);
+          }
+        });
+      }
+
+      if (derived.length === 0) {
+        derived.push("Core Concepts", "Key Terminology", "Principles & Rules", "Applications & Analysis");
+      }
+
+      setAvailableTopics(derived);
+      setSelectedTopics(new Set(derived));
     }
   }, [discoveryData]);
 
@@ -354,12 +379,23 @@ export function AiQuizGeneratorModal({
     }
   };
 
+  // Reset modal step and state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      setActiveJobId(null);
+    }
+  }, [isOpen]);
+
   const isFailedState = jobStatusData?.job_status === "FAILED";
 
   // Transition to Review when ready
-  if (step === 2 && jobStatusData?.job_status === "READY_FOR_REVIEW") {
-    setStep(3);
-  }
+  useEffect(() => {
+    if (step === 2 && jobStatusData?.job_status === "READY_FOR_REVIEW") {
+      setStep(3);
+    }
+  }, [step, jobStatusData?.job_status]);
+
 
   // Resume History Job
   const handleResumeHistoryJob = (jobId: string) => {
@@ -450,7 +486,7 @@ export function AiQuizGeneratorModal({
   const estimatedTokens = Math.round(totalWords * 0.78);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="w-full max-w-4xl rounded-3xl border border-border bg-card shadow-2xl overflow-hidden my-8 flex flex-col max-h-[90vh]">
         {/* HEADER BAR */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/40 flex-shrink-0">

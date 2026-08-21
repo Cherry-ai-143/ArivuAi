@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   BarChart3,
   Clock,
+  Copy,
   Eye,
   FileText,
   MoreVertical,
@@ -153,6 +154,42 @@ export function AssessmentsList({
                 </button>
                 {openMenuId === a.id && (
                   <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-border bg-popover p-1.5 shadow-xl">
+                    <button
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onPreview(a);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <Eye className="size-4 text-primary" />
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onEdit(a);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <Pencil className="size-4 text-indigo-600" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setOpenMenuId(null);
+                        try {
+                          const { duplicateAssessment } = await import("@/lib/services/assessment.service");
+                          await duplicateAssessment(a.id);
+                          onRefresh();
+                        } catch (err) {
+                          console.error("Failed to duplicate assessment", err);
+                        }
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <Copy className="size-4 text-purple-600" />
+                      Duplicate
+                    </button>
                     {a.status !== "PUBLISHED" && (
                       <button
                         onClick={() => handleStatusChange(a.id, "PUBLISHED")}
@@ -222,7 +259,7 @@ export function AssessmentsList({
                 <button
                   onClick={() => onPreview(a)}
                   className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Preview"
+                  title="View Details"
                 >
                   <Eye className="size-4" />
                 </button>
@@ -232,12 +269,6 @@ export function AssessmentsList({
                   title="Edit"
                 >
                   <Pencil className="size-4" />
-                </button>
-                <button
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Analytics"
-                >
-                  <BarChart3 className="size-4" />
                 </button>
               </div>
             </div>

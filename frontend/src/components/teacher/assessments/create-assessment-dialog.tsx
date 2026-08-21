@@ -1,15 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Eye,
+  FileText,
+  HelpCircle,
+  Layers,
   Loader2,
+  Plus,
   Save,
   Search,
   Send,
   Sparkles,
+  Target,
+  Trophy,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -36,6 +48,7 @@ import type { Course } from "@/types/course";
 import type { Chapter } from "@/types/chapter";
 import type { Lesson } from "@/types/lesson";
 import { QuestionPreviewModal } from "@/components/teacher/questions/question-preview-modal";
+import { AiQuizGeneratorModal } from "@/components/teacher/quizzes/ai-quiz-generator-modal";
 
 interface CreateAssessmentDialogProps {
   open?: boolean;
@@ -53,16 +66,16 @@ const STEPS = ["Details", "Select Questions", "Settings", "Review & Publish"];
 
 const ASSESSMENT_TYPES: { value: AssessmentType; label: string }[] = [
   { value: "QUIZ", label: "Quiz" },
-  { value: "PRACTICE", label: "Practice" },
+  { value: "PRACTICE", label: "Practice Test" },
   { value: "CHAPTER_TEST", label: "Chapter Test" },
   { value: "MIDTERM", label: "Midterm" },
-  { value: "FINAL", label: "Final" },
+  { value: "FINAL", label: "Final Exam" },
 ];
 
 const ASSESSMENT_SCOPES: { value: AssessmentScope; label: string }[] = [
-  { value: "LESSON", label: "Lesson" },
-  { value: "CHAPTER", label: "Chapter" },
-  { value: "COURSE", label: "Course" },
+  { value: "LESSON", label: "Lesson Scope" },
+  { value: "CHAPTER", label: "Chapter Scope" },
+  { value: "COURSE", label: "Course Scope" },
 ];
 
 export function CreateAssessmentDialog({
@@ -88,8 +101,7 @@ export function CreateAssessmentDialog({
   // Step 1 - Details
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assessmentType, setAssessmentType] =
-    useState<AssessmentType>("QUIZ");
+  const [assessmentType, setAssessmentType] = useState<AssessmentType>("QUIZ");
   const [scope, setScope] = useState<AssessmentScope>("LESSON");
   const [courseId, setCourseId] = useState<number | "">("");
   const [chapterId, setChapterId] = useState<number | "">("");
@@ -101,9 +113,12 @@ export function CreateAssessmentDialog({
   const [qSearch, setQSearch] = useState("");
   const [qDifficulty, setQDifficulty] = useState("");
   const [qType, setQType] = useState("");
+  const [qBloom, setQBloom] = useState("");
+  const [qSource, setQSource] = useState("");
   const [qLessonId, setQLessonId] = useState<number | "">("");
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
   // Step 3 - Settings
   const [durationMinutes, setDurationMinutes] = useState(20);
@@ -111,7 +126,7 @@ export function CreateAssessmentDialog({
   const [maxAttempts, setMaxAttempts] = useState(3);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
-  const [showCorrectAnswers, setShowCorrectAnswers] = useState(true);
+  const [answerReview, setAnswerReview] = useState<"IMMEDIATELY" | "AFTER_CLOSE" | "NEVER">("IMMEDIATELY");
 
   // Data
   const [courses, setCourses] = useState<Course[]>([]);
@@ -162,11 +177,16 @@ export function CreateAssessmentDialog({
     try {
       const res = await searchQuestions({
         q: qSearch || undefined,
-        lesson_id: qLessonId ? Number(qLessonId) : undefined,
+        course_id: courseId ? Number(courseId) : undefined,
+        chapter_id: chapterId ? Number(chapterId) : undefined,
+        lesson_id: qLessonId ? Number(qLessonId) : lessonId ? Number(lessonId) : undefined,
         difficulty: qDifficulty || undefined,
         type: qType || undefined,
+        bloom_level: qBloom || undefined,
+        source: qSource || undefined,
+        status: "Approved",
         page: 1,
-        page_size: 50,
+        page_size: 100,
       });
       setQuestions(res.items || []);
     } catch {
@@ -181,15 +201,77 @@ export function CreateAssessmentDialog({
       loadQuestions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, qSearch, qDifficulty, qType, qLessonId]);
+  }, [step, qSearch, qDifficulty, qType, qBloom, qSource, qLessonId, courseId, chapterId, lessonId]);
 
   const toggleQuestion = (id: number) => {
     setSelectedQuestionIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((q) => q !== id)
-        : [...prev, id]
+      prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]
     );
   };
+
+  const moveQuestionUp = (index: number) => {
+    if (index <= 0) return;
+    setSelectedQuestionIds((prev) => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[index - 1];
+      next[index - 1] = temp;
+      return next;
+    });
+  };
+
+  const moveQuestionDown = (index: number) => {
+    setSelectedQuestionIds((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[index + 1];
+      next[index + 1] = temp;
+      return next;
+    });
+  };
+
+  // Selected questions lookup for calculation
+  const selectedQuestionsList = useMemo(() => {
+    const map = new Map<number, Question>();
+    questions.forEach((q) => map.set(q.id, q));
+    return selectedQuestionIds
+      .map((id) => map.get(id))
+      .filter((q): q is Question => q !== undefined);
+  }, [selectedQuestionIds, questions]);
+
+  const totalMarks = useMemo(() => {
+    return selectedQuestionsList.reduce((sum, q) => sum + (q.marks || 1), 0);
+  }, [selectedQuestionsList]);
+
+  // Distributions
+  const difficultyDist = useMemo(() => {
+    const dist = { Easy: 0, Medium: 0, Hard: 0 };
+    selectedQuestionsList.forEach((q) => {
+      const diff = (q.difficulty || "Medium") as keyof typeof dist;
+      if (dist[diff] !== undefined) dist[diff]++;
+      else dist["Medium"]++;
+    });
+    return dist;
+  }, [selectedQuestionsList]);
+
+  const bloomDist = useMemo(() => {
+    const dist: Record<string, number> = {};
+    selectedQuestionsList.forEach((q) => {
+      const level = q.bloom_level || "Understanding";
+      dist[level] = (dist[level] || 0) + 1;
+    });
+    return dist;
+  }, [selectedQuestionsList]);
+
+  const typeDist = useMemo(() => {
+    const dist: Record<string, number> = {};
+    selectedQuestionsList.forEach((q) => {
+      const type = q.type || "Multiple Choice";
+      dist[type] = (dist[type] || 0) + 1;
+    });
+    return dist;
+  }, [selectedQuestionsList]);
 
   const resetForm = () => {
     setStep(1);
@@ -207,12 +289,10 @@ export function CreateAssessmentDialog({
     setMaxAttempts(3);
     setShuffleQuestions(true);
     setShuffleOptions(true);
-    setShowCorrectAnswers(true);
+    setAnswerReview("IMMEDIATELY");
   };
 
-  const buildPayload = (
-    status: AssessmentStatus
-  ): AssessmentCreateRequest => ({
+  const buildPayload = (status: AssessmentStatus): AssessmentCreateRequest => ({
     title,
     description: description || null,
     assessment_type: assessmentType,
@@ -226,14 +306,17 @@ export function CreateAssessmentDialog({
     max_attempts: maxAttempts,
     shuffle_questions: shuffleQuestions,
     shuffle_options: shuffleOptions,
-    show_correct_answers: showCorrectAnswers,
+    show_correct_answers: answerReview !== "NEVER",
     question_ids: selectedQuestionIds,
   });
 
   const handleSubmit = async (status: AssessmentStatus) => {
-    if (!title.trim() || !courseId) {
+    if (!title.trim() || !courseId) return;
+    if (status === "PUBLISHED" && selectedQuestionIds.length === 0) {
+      alert("Cannot publish an assessment with zero questions.");
       return;
     }
+
     setSubmitting(true);
     try {
       const payload = buildPayload(status);
@@ -241,25 +324,37 @@ export function CreateAssessmentDialog({
       onCreated?.();
       resetForm();
       handleClose();
-    } catch (err) {
-      console.error("Failed to create assessment", err);
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || "Failed to save assessment.");
     } finally {
       setSubmitting(false);
     }
   };
 
   const canProceed = () => {
-    if (step === 1) return title.trim() && courseId;
+    if (step === 1) {
+      if (!title.trim() || !courseId) return false;
+      if (scope === "LESSON" && (!chapterId || !lessonId)) return false;
+      if (scope === "CHAPTER" && !chapterId) return false;
+      return true;
+    }
     if (step === 2) return selectedQuestionIds.length > 0;
+    if (step === 3) return durationMinutes > 0 && passingScore >= 0 && passingScore <= 100 && maxAttempts >= 1;
     return true;
   };
+
+  const selectedCourseObj = courses.find((c) => c.id === Number(courseId));
+  const selectedChapterObj = chapters.find((ch) => ch.id === Number(chapterId));
+  const selectedLessonObj = lessons.find((l) => l.id === Number(lessonId));
 
   return (
     <>
       <Dialog open={isActuallyOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Assessment</DialogTitle>
+            <DialogTitle className="text-xl font-serif font-bold text-foreground">
+              Create & Configure Assessment
+            </DialogTitle>
           </DialogHeader>
 
           {/* Stepper */}
@@ -269,49 +364,45 @@ export function CreateAssessmentDialog({
               return (
                 <div key={label} className="flex flex-1 items-center gap-2">
                   <div
-                    className={`flex size-8 items-center justify-center rounded-full text-xs font-bold ${s <= step
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                      }`}
+                    className={`flex size-8 items-center justify-center rounded-full text-xs font-bold transition-all ${
+                      s <= step ? "bg-primary text-primary-foreground shadow" : "bg-muted text-muted-foreground"
+                    }`}
                   >
                     {s}
                   </div>
+                  <span className="text-xs font-semibold hidden sm:inline text-foreground">{label}</span>
                   {s < STEPS.length && (
-                    <div
-                      className={`h-1 flex-1 rounded ${s < step ? "bg-primary" : "bg-muted"
-                        }`}
-                    />
+                    <div className={`h-1 flex-1 rounded ${s < step ? "bg-primary" : "bg-muted"}`} />
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* Step 1 - Details */}
+          {/* STEP 1 — DETAILS */}
           {step === 1 && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                  Assessment Title
+                <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                  Assessment Title *
                 </label>
                 <Input
-                  placeholder="e.g., Python Fundamentals Quiz"
+                  placeholder="e.g., Quadratic Equations — Chapter Test"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  className="rounded-xl"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Type
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                    Assessment Type *
                   </label>
                   <select
                     value={assessmentType}
-                    onChange={(e) =>
-                      setAssessmentType(e.target.value as AssessmentType)
-                    }
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                    onChange={(e) => setAssessmentType(e.target.value as AssessmentType)}
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30"
                   >
                     {ASSESSMENT_TYPES.map((t) => (
                       <option key={t.value} value={t.value}>
@@ -321,15 +412,13 @@ export function CreateAssessmentDialog({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Scope
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                    Scope *
                   </label>
                   <select
                     value={scope}
-                    onChange={(e) =>
-                      setScope(e.target.value as AssessmentScope)
-                    }
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                    onChange={(e) => setScope(e.target.value as AssessmentScope)}
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30"
                   >
                     {ASSESSMENT_SCOPES.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -341,19 +430,19 @@ export function CreateAssessmentDialog({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                  Course
+                <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                  Target Course *
                 </label>
                 <select
                   value={courseId}
-                  onChange={(e) =>
-                    setCourseId(
-                      e.target.value ? Number(e.target.value) : ""
-                    )
-                  }
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  onChange={(e) => {
+                    setCourseId(e.target.value ? Number(e.target.value) : "");
+                    setChapterId("");
+                    setLessonId("");
+                  }}
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30"
                 >
-                  <option value="">Select a course...</option>
+                  <option value="">Select Course...</option>
                   {courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
@@ -362,22 +451,21 @@ export function CreateAssessmentDialog({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Chapter (optional)
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider flex items-center justify-between">
+                    <span>Chapter {scope !== "COURSE" && "*"}</span>
                   </label>
                   <select
                     value={chapterId}
-                    onChange={(e) =>
-                      setChapterId(
-                        e.target.value ? Number(e.target.value) : ""
-                      )
-                    }
+                    onChange={(e) => {
+                      setChapterId(e.target.value ? Number(e.target.value) : "");
+                      setLessonId("");
+                    }}
                     disabled={!courseId}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
                   >
-                    <option value="">Select a chapter...</option>
+                    <option value="">All / Select Chapter...</option>
                     {chapters.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.title}
@@ -386,20 +474,16 @@ export function CreateAssessmentDialog({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Lesson (optional)
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider flex items-center justify-between">
+                    <span>Lesson {scope === "LESSON" && "*"}</span>
                   </label>
                   <select
                     value={lessonId}
-                    onChange={(e) =>
-                      setLessonId(
-                        e.target.value ? Number(e.target.value) : ""
-                      )
-                    }
+                    onChange={(e) => setLessonId(e.target.value ? Number(e.target.value) : "")}
                     disabled={!chapterId}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+                    className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
                   >
-                    <option value="">Select a lesson...</option>
+                    <option value="">All / Select Lesson...</option>
                     {lessons.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.title}
@@ -410,237 +494,377 @@ export function CreateAssessmentDialog({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                  Description (optional)
+                <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                  Description (Optional)
                 </label>
                 <textarea
-                  placeholder="Add assessment description"
+                  placeholder="Provide instructions or background for students taking this assessment..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="h-20 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  className="h-24 w-full rounded-xl border border-border bg-card p-3 text-xs text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
                 />
               </div>
             </div>
           )}
 
-          {/* Step 2 - Select Questions */}
+          {/* STEP 2 — SELECT QUESTIONS */}
           {step === 2 && (
             <div className="space-y-4">
-              {/* Filters */}
+              {/* Summary Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/30 p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-semibold">Available Questions: <strong className="text-foreground">{questions.length}</strong></p>
+                  <p className="text-sm font-bold text-foreground">
+                    Selected: <span className="text-primary">{selectedQuestionIds.length}</span> questions • Total Marks: <span className="text-amber-500 font-black">{totalMarks}</span>
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => setIsAiModalOpen(true)}
+                  className="gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-xs font-bold text-white shadow-sm"
+                >
+                  <Sparkles className="size-3.5" /> Generate Questions with AI
+                </Button>
+              </div>
+
+              {/* Question Filters */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     value={qSearch}
                     onChange={(e) => setQSearch(e.target.value)}
-                    placeholder="Search questions..."
-                    className="w-full rounded-lg border border-border bg-card py-2 pl-9 pr-3 text-sm"
+                    placeholder="Search Question Bank..."
+                    className="w-full rounded-xl border border-border bg-card py-2 pl-9 pr-3 text-xs"
                   />
                 </div>
-                <select
-                  value={qLessonId}
-                  onChange={(e) =>
-                    setQLessonId(
-                      e.target.value ? Number(e.target.value) : ""
-                    )
-                  }
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                >
-                  <option value="">All Lessons</option>
-                  {lessons.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.title}
-                    </option>
-                  ))}
-                </select>
+
                 <select
                   value={qDifficulty}
                   onChange={(e) => setQDifficulty(e.target.value)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold"
                 >
                   <option value="">All Difficulties</option>
                   <option value="Easy">Easy</option>
                   <option value="Medium">Medium</option>
                   <option value="Hard">Hard</option>
                 </select>
+
                 <select
                   value={qType}
                   onChange={(e) => setQType(e.target.value)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold"
                 >
-                  <option value="">All Types</option>
+                  <option value="">All Question Types</option>
                   <option value="Multiple Choice">Multiple Choice</option>
                   <option value="True/False">True/False</option>
                   <option value="Fill in the Blanks">Fill in the Blanks</option>
+                  <option value="Multiple Select">Multiple Select</option>
+                </select>
+
+                <select
+                  value={qBloom}
+                  onChange={(e) => setQBloom(e.target.value)}
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="">All Bloom Levels</option>
+                  <option value="Knowledge">Knowledge</option>
+                  <option value="Understanding">Understanding</option>
+                  <option value="Application">Application</option>
+                  <option value="Analysis">Analysis</option>
+                  <option value="Evaluation">Evaluation</option>
+                  <option value="Creation">Creation</option>
+                </select>
+
+                <select
+                  value={qSource}
+                  onChange={(e) => setQSource(e.target.value)}
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="">All Sources</option>
+                  <option value="Manual">Manual</option>
+                  <option value="AI Generated">AI Generated</option>
                 </select>
               </div>
 
-              {/* Selected counter */}
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">
-                  Selected{" "}
-                  <span className="text-primary">
-                    {selectedQuestionIds.length}
-                  </span>{" "}
-                  questions
-                </p>
-                {loadingQuestions && (
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-
-              {/* Question list */}
-              <div className="max-h-[350px] space-y-2 overflow-y-auto rounded-xl border border-border p-2">
-                {questions.length === 0 && !loadingQuestions ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No questions found. Try adjusting filters.
-                  </p>
-                ) : (
-                  questions.map((q) => {
-                    const selected = selectedQuestionIds.includes(q.id);
-                    return (
-                      <div
-                        key={q.id}
-                        className={`flex items-start gap-3 rounded-xl border p-3 transition-all ${selected
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-card hover:bg-muted/30"
+              {/* Two Column Layout: Picker Left, Selected Sticky Panel Right */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[380px]">
+                {/* Left Column: Question Bank list */}
+                <div className="md:col-span-2 space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                  {loadingQuestions ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                      <Loader2 className="size-6 animate-spin text-primary" />
+                      <p className="text-xs font-semibold">Fetching eligible Question Bank questions...</p>
+                    </div>
+                  ) : questions.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border p-8 text-center space-y-2">
+                      <FileText className="size-8 text-muted-foreground mx-auto opacity-50" />
+                      <p className="text-xs font-semibold text-foreground">No approved questions found</p>
+                      <p className="text-[11px] text-muted-foreground">Try adjusting filters or generate questions using AI.</p>
+                    </div>
+                  ) : (
+                    questions.map((q) => {
+                      const isSelected = selectedQuestionIds.includes(q.id);
+                      return (
+                        <div
+                          key={q.id}
+                          className={`flex items-start gap-3 rounded-2xl border p-3.5 transition-all ${
+                            isSelected ? "border-primary bg-primary/5 shadow-xs" : "border-border bg-card hover:bg-muted/30"
                           }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleQuestion(q.id)}
-                          className="mt-1 size-4 rounded border-border"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground line-clamp-2">
-                            {q.question_text}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            {q.difficulty && (
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                                {q.difficulty}
-                              </span>
-                            )}
-                            {q.bloom_level && (
-                              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
-                                {q.bloom_level}
-                              </span>
-                            )}
-                            {q.is_ai_generated && (
-                              <span className="flex items-center gap-0.5 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-600">
-                                <Sparkles className="size-2.5" /> AI
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setPreviewQuestion(q)}
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
-                          <Eye className="size-4" />
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleQuestion(q.id)}
+                            className="mt-1 size-4 rounded border-border"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-foreground line-clamp-2">{q.question_text}</p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                                {q.type || "Multiple Choice"}
+                              </span>
+                              <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600">
+                                {q.marks || 1} mark
+                              </span>
+                              {q.difficulty && (
+                                <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600">
+                                  {q.difficulty}
+                                </span>
+                              )}
+                              {q.bloom_level && (
+                                <span className="rounded-md bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-600">
+                                  {q.bloom_level}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setPreviewQuestion(q)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                            title="Preview Question"
+                          >
+                            <Eye className="size-4" />
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Right Sticky Panel: Selected Questions List */}
+                <div className="rounded-2xl border border-border bg-card p-4 space-y-3 flex flex-col justify-between max-h-[420px]">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-border pb-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">Selected Questions</h4>
+                      <span className="text-xs font-bold text-primary">{selectedQuestionIds.length}</span>
+                    </div>
+
+                    <div className="mt-3 space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      {selectedQuestionIds.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-10">Select questions from the left list.</p>
+                      ) : (
+                        selectedQuestionIds.map((qId, idx) => {
+                          const qObj = questions.find((q) => q.id === qId);
+                          return (
+                            <div key={qId} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-muted/20 text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="size-5 rounded-md bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-semibold text-foreground truncate max-w-[110px]">
+                                  {qObj?.question_text || `Question #${qId}`}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="text-[10px] font-bold text-muted-foreground mr-1">{qObj?.marks || 1}pt</span>
+                                <button
+                                  onClick={() => moveQuestionUp(idx)}
+                                  disabled={idx === 0}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30"
+                                >
+                                  <ArrowUp className="size-3" />
+                                </button>
+                                <button
+                                  onClick={() => moveQuestionDown(idx)}
+                                  disabled={idx === selectedQuestionIds.length - 1}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground disabled:opacity-30"
+                                >
+                                  <ArrowDown className="size-3" />
+                                </button>
+                                <button
+                                  onClick={() => toggleQuestion(qId)}
+                                  className="p-1 rounded hover:bg-rose-500/10 text-rose-600"
+                                >
+                                  <X className="size-3" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-bold">
+                    <span>Total Marks:</span>
+                    <span className="text-primary text-sm">{totalMarks} Marks</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Step 3 - Settings */}
+          {/* STEP 3 — SETTINGS & QUALITY DISTRIBUTIONS */}
           {step === 3 && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Duration (minutes)
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                    Duration (Minutes) *
                   </label>
                   <Input
                     type="number"
                     value={durationMinutes}
-                    onChange={(e) =>
-                      setDurationMinutes(Number(e.target.value))
-                    }
+                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                    className="rounded-xl"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                    Passing Score (%)
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                    Passing Score (%) *
                   </label>
                   <Input
                     type="number"
                     value={passingScore}
-                    onChange={(e) =>
-                      setPassingScore(Number(e.target.value))
-                    }
+                    onChange={(e) => setPassingScore(Number(e.target.value))}
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                    Max Attempts *
+                  </label>
+                  <Input
+                    type="number"
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                    className="rounded-xl"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-foreground">
-                  Max Attempts
-                </label>
-                <Input
-                  type="number"
-                  value={maxAttempts}
-                  onChange={(e) => setMaxAttempts(Number(e.target.value))}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ToggleRow label="Shuffle Questions Order" value={shuffleQuestions} onChange={setShuffleQuestions} />
+                <ToggleRow label="Shuffle Options Order" value={shuffleOptions} onChange={setShuffleOptions} />
               </div>
 
-              <div className="space-y-3">
-                <ToggleRow
-                  label="Shuffle Questions"
-                  value={shuffleQuestions}
-                  onChange={setShuffleQuestions}
-                />
-                <ToggleRow
-                  label="Shuffle Options"
-                  value={shuffleOptions}
-                  onChange={setShuffleOptions}
-                />
-                <ToggleRow
-                  label="Show Correct Answers"
-                  value={showCorrectAnswers}
-                  onChange={setShowCorrectAnswers}
-                />
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-foreground uppercase tracking-wider">
+                  Answer Review Setting
+                </label>
+                <select
+                  value={answerReview}
+                  onChange={(e) => setAnswerReview(e.target.value as any)}
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-xs font-semibold text-foreground focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="IMMEDIATELY">Immediately after submission</option>
+                  <option value="AFTER_CLOSE">After assessment closes</option>
+                  <option value="NEVER">Never expose correct answers</option>
+                </select>
+              </div>
+
+              {/* Assessment Quality Summary Cards */}
+              <div className="rounded-2xl border border-border bg-muted/20 p-5 space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                  <BarChart3 className="size-4 text-primary" /> Assessment Quality Summary
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Difficulty Distribution */}
+                  <div className="rounded-xl border border-border bg-card p-3 space-y-1">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Difficulty Distribution</p>
+                    <div className="text-xs font-semibold space-y-1 pt-1">
+                      <div className="flex justify-between"><span>Easy:</span> <strong className="text-emerald-600">{difficultyDist.Easy}</strong></div>
+                      <div className="flex justify-between"><span>Medium:</span> <strong className="text-amber-600">{difficultyDist.Medium}</strong></div>
+                      <div className="flex justify-between"><span>Hard:</span> <strong className="text-rose-600">{difficultyDist.Hard}</strong></div>
+                    </div>
+                  </div>
+
+                  {/* Question Type Distribution */}
+                  <div className="rounded-xl border border-border bg-card p-3 space-y-1">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Question Types</p>
+                    <div className="text-xs font-semibold space-y-1 pt-1">
+                      {Object.entries(typeDist).map(([t, count]) => (
+                        <div key={t} className="flex justify-between">
+                          <span className="truncate max-w-[100px]">{t}:</span>
+                          <strong className="text-primary">{count}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bloom's Level Distribution */}
+                  <div className="rounded-xl border border-border bg-card p-3 space-y-1">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase">Bloom's Taxonomy</p>
+                    <div className="text-xs font-semibold space-y-1 pt-1">
+                      {Object.entries(bloomDist).map(([b, count]) => (
+                        <div key={b} className="flex justify-between">
+                          <span className="truncate max-w-[100px]">{b}:</span>
+                          <strong className="text-violet-600">{count}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Step 4 - Review & Publish */}
+          {/* STEP 4 — REVIEW & PUBLISH */}
           {step === 4 && (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-muted/20 p-5">
-                <h3 className="text-base font-bold text-foreground">
-                  {title}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {description || "No description"}
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-border bg-gradient-to-r from-primary/10 to-indigo-500/10 p-5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-md bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
+                    {assessmentType} • {scope} Scope
+                  </span>
+                  <button onClick={() => setStep(1)} className="text-xs font-bold text-primary hover:underline">
+                    Edit Details
+                  </button>
+                </div>
+                <h3 className="text-lg font-bold text-foreground">{title}</h3>
+                <p className="text-xs text-muted-foreground">{description || "No description specified."}</p>
+                <p className="text-xs font-semibold text-muted-foreground pt-1">
+                  Course: <strong className="text-foreground">{selectedCourseObj?.title}</strong>
+                  {selectedChapterObj && <> • Chapter: <strong className="text-foreground">{selectedChapterObj.title}</strong></>}
+                  {selectedLessonObj && <> • Lesson: <strong className="text-foreground">{selectedLessonObj.title}</strong></>}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <ReviewItem label="Type" value={assessmentType} />
-                <ReviewItem label="Scope" value={scope} />
-                <ReviewItem
-                  label="Questions"
-                  value={String(selectedQuestionIds.length)}
-                />
-                <ReviewItem
-                  label="Duration"
-                  value={`${durationMinutes} min`}
-                />
-                <ReviewItem
-                  label="Passing Score"
-                  value={`${passingScore}%`}
-                />
-                <ReviewItem
-                  label="Max Attempts"
-                  value={String(maxAttempts)}
-                />
+              {/* Config Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <ReviewItem label="Total Questions" value={`${selectedQuestionIds.length} Questions`} />
+                <ReviewItem label="Total Marks" value={`${totalMarks} Marks`} />
+                <ReviewItem label="Duration" value={`${durationMinutes} Minutes`} />
+                <ReviewItem label="Passing Score" value={`${passingScore}% Pass`} />
+              </div>
+
+              {/* Jump Edit Bar */}
+              <div className="flex items-center justify-between pt-2 border-t border-border">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setStep(1)}>
+                    Edit Details
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setStep(2)}>
+                    Edit Questions
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setStep(3)}>
+                    Edit Settings
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -651,14 +875,13 @@ export function CreateAssessmentDialog({
               variant="outline"
               onClick={() => setStep((s) => Math.max(1, s - 1))}
               disabled={step === 1}
-              className="gap-1"
+              className="gap-1 rounded-xl"
             >
-              <ChevronLeft className="size-4" />
-              Previous
+              <ChevronLeft className="size-4" /> Previous
             </Button>
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose} className="rounded-xl">
                 Cancel
               </Button>
 
@@ -666,10 +889,9 @@ export function CreateAssessmentDialog({
                 <Button
                   onClick={() => setStep((s) => Math.min(4, s + 1))}
                   disabled={!canProceed()}
-                  className="gap-1"
+                  className="gap-1 rounded-xl"
                 >
-                  Next
-                  <ChevronRight className="size-4" />
+                  Next <ChevronRight className="size-4" />
                 </Button>
               ) : (
                 <>
@@ -677,21 +899,16 @@ export function CreateAssessmentDialog({
                     variant="outline"
                     onClick={() => handleSubmit("DRAFT")}
                     disabled={submitting}
-                    className="gap-1"
+                    className="gap-1 rounded-xl"
                   >
-                    <Save className="size-4" />
-                    Save Draft
+                    <Save className="size-4" /> Save Draft
                   </Button>
                   <Button
                     onClick={() => handleSubmit("PUBLISHED")}
                     disabled={submitting}
-                    className="gap-1"
+                    className="gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
-                    {submitting ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Send className="size-4" />
-                    )}
+                    {submitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
                     Publish Assessment
                   </Button>
                 </>
@@ -701,12 +918,23 @@ export function CreateAssessmentDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Question Preview Modal */}
+      {/* Modals */}
       <QuestionPreviewModal
         isOpen={!!previewQuestion}
         question={previewQuestion}
         onClose={() => setPreviewQuestion(null)}
       />
+
+      {isAiModalOpen && (
+        <AiQuizGeneratorModal
+          isOpen={isAiModalOpen}
+          onClose={() => setIsAiModalOpen(false)}
+          lessonId={Number(lessonId) || (lessons[0]?.id ? Number(lessons[0].id) : 1)}
+          onSuccess={() => {
+            loadQuestions();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -722,23 +950,23 @@ function ToggleRow({
 }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-xs font-semibold text-foreground">{label}</span>
       <div className="flex gap-1">
         <button
+          type="button"
           onClick={() => onChange(true)}
-          className={`rounded-lg px-3 py-1 text-xs font-semibold ${value
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
-            }`}
+          className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+            value ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted text-muted-foreground"
+          }`}
         >
           Yes
         </button>
         <button
+          type="button"
           onClick={() => onChange(false)}
-          className={`rounded-lg px-3 py-1 text-xs font-semibold ${!value
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
-            }`}
+          className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all ${
+            !value ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted text-muted-foreground"
+          }`}
         >
           No
         </button>
@@ -749,9 +977,9 @@ function ToggleRow({
 
 function ReviewItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2">
-      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm font-bold text-foreground">{value}</p>
+    <div className="rounded-xl border border-border bg-card px-3.5 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-xs font-bold text-foreground">{value}</p>
     </div>
   );
 }

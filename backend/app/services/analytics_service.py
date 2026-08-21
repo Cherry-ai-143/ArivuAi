@@ -69,6 +69,23 @@ class AnalyticsService:
         ).scalar()
         average_score = round(float(avg_score_res), 1) if avg_score_res else 0.0
 
+        # 6b. Assignment Metrics
+        from app.models.assignment import AssignmentSubmission, SubmissionStatus
+        assignments_completed = self.db.execute(
+            select(func.count(AssignmentSubmission.id)).where(
+                AssignmentSubmission.student_id == student_id,
+                AssignmentSubmission.status == SubmissionStatus.GRADED,
+            )
+        ).scalar() or 0
+
+        avg_assign_res = self.db.execute(
+            select(func.avg(AssignmentSubmission.score)).where(
+                AssignmentSubmission.student_id == student_id,
+                AssignmentSubmission.status == SubmissionStatus.GRADED,
+            )
+        ).scalar()
+        average_assignment_score = round(float(avg_assign_res), 1) if avg_assign_res else 0.0
+
         # 7. Learning Streak (Consecutive Active Days)
         streak = self.calculate_learning_streak(student_id)
 
@@ -79,10 +96,13 @@ class AnalyticsService:
             "lessons_completed": lessons_completed,
             "courses_completed": courses_completed,
             "average_score": average_score,
+            "average_assignment_score": average_assignment_score,
+            "assignments_completed": assignments_completed,
             "current_streak": streak["current_streak"],
             "longest_streak": streak["longest_streak"],
             "last_active": streak["last_active"],
         }
+
 
     def calculate_learning_streak(self, student_id: int) -> Dict[str, Any]:
         # Fetch distinct active dates from StudySessions & AssessmentAttempts

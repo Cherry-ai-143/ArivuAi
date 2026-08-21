@@ -54,8 +54,8 @@ class AssessmentAttemptService:
         attempt_data: AssessmentAttemptCreate,
         current_user: User,
     ):
-        # Only students can start assessments
-        if current_user.role.name != "STUDENT":
+        user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role).lower()
+        if user_role not in ["student", "admin", "teacher"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only students can start assessments",
@@ -77,19 +77,20 @@ class AssessmentAttemptService:
             .filter(
                 CourseEnrollment.student_id == current_user.id,
                 CourseEnrollment.course_id == assessment.course_id,
-                CourseEnrollment.status.in_([
-                    EnrollmentStatus.ENROLLED,
-                    EnrollmentStatus.IN_PROGRESS,
-                    EnrollmentStatus.COMPLETED,
-                ]),
             )
             .first()
         )
-        if not enrollment:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You must be enrolled in the course to start this assessment",
+        if not enrollment and user_role == "student":
+            # Auto-enroll student into published course
+            enrollment = CourseEnrollment(
+                student_id=current_user.id,
+                course_id=assessment.course_id,
+                status=EnrollmentStatus.ENROLLED,
             )
+            self.db.add(enrollment)
+            self.db.commit()
+            self.db.refresh(enrollment)
+
 
         # Check for existing IN_PROGRESS attempt (Resume logic)
         existing_in_progress = (

@@ -48,30 +48,50 @@ export function RecentAssessments() {
                   Assessment Title
                 </th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide py-3 px-2">
-                  Total Marks
+                  Marks
                 </th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide py-3 px-2">
                   Duration
+                </th>
+                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide py-3 px-2">
+                  Attempts
+                </th>
+                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide py-3 px-2">
+                  Status
                 </th>
               </tr>
             </thead>
             <tbody>
               {assessmentsList.map((assessment) => (
                 <tr key={assessment.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-4 px-2">
+                  <td className="py-3 px-2">
                     <p className="text-sm font-medium text-foreground">
                       {assessment.title}
                     </p>
                   </td>
-                  <td className="py-4 px-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {assessment.total_marks ?? 100} Marks
+                  <td className="py-3 px-2">
+                    <p className="text-xs font-medium text-foreground">
+                      {assessment.total_marks ?? 0} Marks
                     </p>
                   </td>
-                  <td className="py-4 px-2">
-                    <p className="text-sm text-muted-foreground">
-                      {assessment.duration_minutes ? `${assessment.duration_minutes} mins` : '30 mins'}
+                  <td className="py-3 px-2">
+                    <p className="text-xs text-muted-foreground">
+                      {assessment.duration_minutes ? `${assessment.duration_minutes} mins` : '20 mins'}
                     </p>
+                  </td>
+                  <td className="py-3 px-2">
+                    <p className="text-xs font-medium text-foreground">
+                      {assessment.attempts_count ?? 0}
+                    </p>
+                  </td>
+                  <td className="py-3 px-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      assessment.status === 'PUBLISHED'
+                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                    }`}>
+                      {assessment.status || 'DRAFT'}
+                    </span>
                   </td>
                 </tr>
               ))}

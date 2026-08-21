@@ -14,11 +14,13 @@ import {
   BookOpen,
   Target,
   UserCheck,
+  AlertCircle,
 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
 import { useUploadAvatar } from '@/hooks/useProfile'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { WelcomeLogoCelebration } from '@/components/ui/welcome-logo-celebration'
 import type { EducationLevel } from '@/types/user-profile'
 
 const EDUCATION_LEVELS: EducationLevel[] = [
@@ -79,6 +81,10 @@ export function OnboardingWizard() {
   const [selectedGoals, setSelectedGoals] = useState<string[]>(
     profileDetails?.goals || []
   )
+
+  // Step validation attempt flags
+  const [step3Attempted, setStep3Attempted] = useState(false)
+  const [step4Attempted, setStep4Attempted] = useState(false)
   // Dynamic Interests based on Education & Stream
   const interestOptions = useMemo(() => {
     if (education === 'Higher School (Class 7–10)') {
@@ -271,12 +277,15 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 w-full h-[100dvh] min-h-[100dvh] overflow-y-auto overflow-x-hidden">
+      {/* Full-Viewport Backdrop Layer to guarantee 100% viewport coverage */}
+      <div className="fixed inset-0 bg-black/85 backdrop-blur-md pointer-events-none -z-10 w-full h-full min-h-[100dvh]" />
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl rounded-3xl border border-border/80 bg-card p-6 sm:p-8 shadow-2xl space-y-6 my-auto"
+        className="relative z-10 w-full max-w-2xl rounded-3xl border border-border/80 bg-card p-6 sm:p-8 shadow-2xl space-y-6 my-auto overflow-hidden"
       >
         {/* Horizontal Progress Bar & Step Labels */}
         <div className="space-y-3 border-b border-border/60 pb-5">
@@ -880,6 +889,17 @@ export function OnboardingWizard() {
                 })}
               </div>
 
+              {step3Attempted && selectedInterests.length < 2 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-semibold text-destructive flex items-center gap-2"
+                >
+                  <AlertCircle className="size-4 flex-shrink-0" />
+                  <span>Please select at least 2 learning interests to continue.</span>
+                </motion.div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t border-border/40">
                 <button
                   type="button"
@@ -891,7 +911,12 @@ export function OnboardingWizard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(4)}
+                  onClick={() => {
+                    setStep3Attempted(true)
+                    if (selectedInterests.length >= 2) {
+                      setStep(4)
+                    }
+                  }}
                   className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-lg hover:brightness-110 transition-all"
                 >
                   Next
@@ -946,6 +971,17 @@ export function OnboardingWizard() {
                 })}
               </div>
 
+              {step4Attempted && selectedGoals.length < 2 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs font-semibold text-destructive flex items-center gap-2"
+                >
+                  <AlertCircle className="size-4 flex-shrink-0" />
+                  <span>Please select at least 2 goals to continue.</span>
+                </motion.div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t border-border/40">
                 <button
                   type="button"
@@ -957,7 +993,12 @@ export function OnboardingWizard() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(5)}
+                  onClick={() => {
+                    setStep4Attempted(true)
+                    if (selectedGoals.length >= 2) {
+                      setStep(5)
+                    }
+                  }}
                   className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-lg hover:brightness-110 transition-all"
                 >
                   Next
@@ -976,16 +1017,18 @@ export function OnboardingWizard() {
               exit={{ opacity: 0, scale: 0.9 }}
               className="space-y-6 text-center py-4"
             >
-              <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-accent/20 text-accent">
-                <Sparkles className="size-10 animate-bounce" />
-              </div>
+              <WelcomeLogoCelebration />
 
-              <div>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
+              >
                 <h2 className="font-serif text-3xl font-bold text-foreground">Welcome to Arivu AI! 🎉</h2>
                 <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
                   Your personalized learning profile for <span className="font-semibold text-foreground">{education}</span> is set up. Let's start learning smarter!
                 </p>
-              </div>
+              </motion.div>
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <button
@@ -999,7 +1042,7 @@ export function OnboardingWizard() {
                 <button
                   type="button"
                   onClick={handleFinish}
-                  className="w-full sm:flex-1 rounded-2xl bg-accent px-8 py-3.5 text-base font-bold text-accent-foreground shadow-xl hover:brightness-110 transition-all"
+                  className="w-full sm:flex-1 rounded-2xl bg-accent px-8 py-3.5 text-base font-bold text-accent-foreground shadow-xl hover:brightness-110 transition-all active:scale-[0.98]"
                 >
                   Finish Setup
                 </button>

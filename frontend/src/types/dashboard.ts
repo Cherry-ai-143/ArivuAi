@@ -89,11 +89,37 @@ export interface TeacherCourseSummary {
   students_count?: number;
 }
 
-export interface RecentAssessmentSummary {
-  id: number;
+export interface PerformanceOverviewDay {
+  day: string;
+  date: string;
+  averageScore: number;
+  completionRate: number;
+}
+
+export interface CourseOverviewStats {
+  completed: number;
+  in_progress: number;
+  not_started: number;
+  total_students: number;
+}
+
+export interface TopStudentItem {
+  id: string | number;
+  name: string;
+  avatar: string;
+  score: number;
+  improvement: number;
+  rank: number;
+}
+
+export interface UpcomingActivityItem {
+  id: string | number;
   title: string;
-  total_marks?: number;
-  duration_minutes?: number;
+  subtitle: string;
+  date: string;
+  time: string;
+  type: "quiz" | "test" | "assignment";
+  badge: string;
 }
 
 export interface StudentPerformanceSummary {
@@ -113,6 +139,17 @@ export interface QuestionBankSummary {
   hard: number;
 }
 
+export interface RecentAssessmentSummary {
+  id: number;
+  title: string;
+  total_marks?: number;
+  duration_minutes?: number;
+  attempts_count?: number;
+  average_score?: number;
+  status?: string;
+  created_at?: string | null;
+}
+
 export interface TeacherDashboardResponse {
   statistics: TeacherDashboardStatistics;
   courses: TeacherCourseSummary[];
@@ -123,6 +160,12 @@ export interface TeacherDashboardResponse {
   notifications: DashboardNotificationItem[];
   uploads: unknown[];
   question_bank: QuestionBankSummary;
+  performance_overview?: {
+    this_week: PerformanceOverviewDay[];
+  };
+  course_overview?: CourseOverviewStats;
+  top_performing_students?: TopStudentItem[];
+  upcoming_activities?: UpcomingActivityItem[];
 }
 
 export interface AdminUsersSummary {

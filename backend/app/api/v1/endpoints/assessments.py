@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, get_optional_current_user
 from app.models.user import User
 from app.enums.assessment import AssessmentStatus
 from app.schemas.assessment import (
@@ -34,7 +34,7 @@ def get_assessments(
     status: AssessmentStatus | None = None,
     scope: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     """List assessments with optional filters (course, status, scope)."""
     service = AssessmentService(db)

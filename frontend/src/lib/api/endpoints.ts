@@ -30,3 +30,5 @@ export const DASHBOARD = "/dashboard";
 export const NOTIFICATIONS = "/notifications";
 export const SEARCH = "/search";
 export const ENROLLMENTS = "/enrollments";
+export const ASSIGNMENTS = "/assignments";
+export const SUBMISSIONS = "/submissions";

@@ -6,3 +6,10 @@ from app.enums.assessment import (
     AssessmentType,
     AssessmentScope,
 )
+from app.enums.assignment import (
+    AssignmentType,
+    AssignmentDifficulty,
+    AssignmentStatus,
+    SubmissionStatus,
+    GradingMethod,
+)

@@ -1199,7 +1199,7 @@ const handleCourseFileUpload = async (file: File) => {
   const handleSelectResourceFile = (file: File) => {
     setResourceValidationError(null)
     const ext = '.' + file.name.split('.').pop()?.toLowerCase()
-    const currentResType = resourceModalTarget?.resType
+    const currentResType = resourceModalTarget?.resType as string | undefined
 
     if (currentResType === 'Document' || currentResType === 'PDF' || currentResType === 'DOCX') {
       if (!['.pdf', '.doc', '.docx'].includes(ext)) {
@@ -2164,11 +2164,11 @@ const handleCourseFileUpload = async (file: File) => {
                         <input
                           type="file"
                           accept={
-                            resourceModalTarget.resType === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
+                            (resourceModalTarget.resType as string) === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
                               ? 'application/pdf,.pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                              : resourceModalTarget.resType === 'PPT'
+                              : (resourceModalTarget.resType as string) === 'PPT'
                               ? '.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation'
-                              : resourceModalTarget.resType === 'TXT'
+                              : (resourceModalTarget.resType as string) === 'TXT'
                               ? '.txt,text/plain'
                               : '.pdf,.doc,.docx,.ppt,.pptx,.txt'
                           }
@@ -2181,11 +2181,11 @@ const handleCourseFileUpload = async (file: File) => {
                         <UploadCloud className="size-8 text-primary opacity-70 mb-2" />
                         <p className="font-bold text-xs text-foreground">Drop files here or click to Browse Files</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {resourceModalTarget.resType === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
+                          {(resourceModalTarget.resType as string) === 'Document' || resourceModalTarget.resType === 'PDF' || resourceModalTarget.resType === 'DOCX'
                             ? 'Supports PDF, DOC, DOCX (Max 25 MB)'
-                            : resourceModalTarget.resType === 'PPT'
+                            : (resourceModalTarget.resType as string) === 'PPT'
                             ? 'Supports PPT, PPTX (Max 25 MB)'
-                            : resourceModalTarget.resType === 'TXT'
+                            : (resourceModalTarget.resType as string) === 'TXT'
                             ? 'Supports TXT (Max 25 MB)'
                             : 'Supports PDF, DOCX, PPT, PPTX, TXT (Max 25 MB)'}
                         </p>

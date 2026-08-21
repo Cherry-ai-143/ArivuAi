@@ -21,6 +21,8 @@ from app.api.v1.endpoints import (
     study,
     bookmarks,
     ai,
+    assignments,
+    submissions,
 )
 
 api_router = APIRouter()
@@ -171,3 +173,17 @@ api_router.include_router(
     prefix="/ai",
     tags=["AI Question Generator"],
 )
+
+# Register Assignments Router
+api_router.include_router(
+    assignments.router,
+    prefix="/assignments",
+    tags=["Assignments"],
+)
+
+# Register Submissions Router
+api_router.include_router(
+    submissions.router,
+    prefix="/submissions",
+    tags=["Submissions"],
+)

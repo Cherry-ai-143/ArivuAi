@@ -21,3 +21,8 @@ from app.models.ai_generation_chunk import AIGenerationChunk
 from app.models.ai_generation_log import AIGenerationLog
 from app.models.prompt_template import PromptTemplate
 from app.models.resource_cache import ResourceCache
+from app.models.assignment import (
+    Assignment,
+    AssignmentRubric,
+    AssignmentSubmission,
+)

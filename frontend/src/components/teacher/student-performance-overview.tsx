@@ -13,51 +13,23 @@ import {
 } from 'recharts'
 import { ChevronDown } from 'lucide-react'
 
-const data = [
-  {
-    day: 'Mon',
-    averageScore: 65,
-    completionRate: 40,
-  },
-  {
-    day: 'Tue',
-    averageScore: 72,
-    completionRate: 45,
-  },
-  {
-    day: 'Wed',
-    averageScore: 68,
-    completionRate: 52,
-  },
-  {
-    day: 'Thu',
-    averageScore: 75,
-    completionRate: 58,
-  },
-  {
-    day: 'Fri',
-    averageScore: 82,
-    completionRate: 72,
-  },
-  {
-    day: 'Sat',
-    averageScore: 78,
-    completionRate: 65,
-  },
-  {
-    day: 'Sun',
-    averageScore: 82,
-    completionRate: 76,
-  },
-  {
-    day: 'Thu, 18 May',
-    averageScore: 82,
-    completionRate: 76,
-  },
-]
+import { useTeacherDashboard } from '@/hooks/useDashboard'
 
 export function StudentPerformanceOverview() {
   const [timeRange, setTimeRange] = useState('thisWeek')
+  const { data, isLoading } = useTeacherDashboard()
+
+  const chartData = data?.performance_overview?.this_week || []
+  const hasData = chartData.some((d) => d.averageScore > 0 || d.completionRate > 0)
+
+  if (isLoading) {
+    return (
+      <div className="rounded-2xl bg-white border border-border shadow-sm p-8 space-y-4">
+        <div className="h-6 w-56 bg-muted rounded animate-pulse" />
+        <div className="h-80 w-full bg-muted/40 rounded-xl animate-pulse" />
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-2xl bg-white border border-border shadow-sm p-8">
@@ -82,17 +54,27 @@ export function StudentPerformanceOverview() {
       </div>
 
       <div className="h-80">
+        {!hasData && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 rounded-xl z-10 p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">No student attempt data for this week</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Performance data will appear as enrolled students attempt and complete your quizzes.
+            </p>
+          </div>
+        )}
+
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="day" stroke="#64748b" />
-            <YAxis stroke="#64748b" />
+            <YAxis stroke="#64748b" domain={[0, 100]} />
             <Tooltip
               contentStyle={{
                 backgroundColor: '#ffffff',
                 border: '1px solid #e5e7eb',
                 borderRadius: '8px',
               }}
+              formatter={(value: any) => [`${value}%`]}
             />
             <Legend />
             <Line
@@ -100,7 +82,7 @@ export function StudentPerformanceOverview() {
               dataKey="averageScore"
               stroke="#1E3A8A"
               strokeWidth={2}
-              name="Average Score"
+              name="Average Score (%)"
               dot={{ fill: '#1E3A8A', r: 5 }}
             />
             <Line
@@ -108,7 +90,7 @@ export function StudentPerformanceOverview() {
               dataKey="completionRate"
               stroke="#F97316"
               strokeWidth={2}
-              name="Completion Rate"
+              name="Completion Rate (%)"
               dot={{ fill: '#F97316', r: 5 }}
             />
           </LineChart>

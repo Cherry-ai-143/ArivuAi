@@ -24,15 +24,15 @@ export function ResourcePreviewModal({
   if (!isOpen || !resourceId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="w-full max-w-3xl rounded-3xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/40 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-purple-600/10 text-purple-600 border border-purple-600/20">
-              {data?.type.includes("PDF") ? (
+              {data?.type?.includes("PDF") ? (
                 <FileText className="size-5 text-rose-500" />
-              ) : data?.type.includes("YouTube") ? (
+              ) : data?.type?.includes("YouTube") ? (
                 <Video className="size-5 text-rose-600" />
               ) : (
                 <FileCode className="size-5 text-indigo-500" />

@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSidebar } from '@/context/sidebar-context'
 import {
+
   LayoutDashboard,
   BookOpen,
   CheckSquare,
+  ClipboardList,
   BarChart3,
+
   Calendar,
   FileText,
   Bookmark,
@@ -25,7 +28,9 @@ const navItems = [
   { label: 'My Learning', icon: BookOpen, href: '/dashboard/courses?tab=my-learning' },
   { label: 'Explore Courses', icon: Zap, href: '/dashboard/courses' },
   { label: 'Assessments', icon: CheckSquare, href: '/dashboard/assessments' },
+  { label: 'Assignments', icon: ClipboardList, href: '/dashboard/assignments' },
   { label: 'Certificates', icon: Trophy, href: '/dashboard/course-completion' },
+
   { label: 'Analytics', icon: BarChart3, href: '/dashboard/analytics' },
   { label: 'Study Planner', icon: Calendar, href: '/dashboard/study-planner' },
   { label: 'Notes', icon: FileText, href: '/dashboard/notes' },
@@ -36,16 +41,16 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [isExpanded, setIsExpanded] = useState(true)
+  const { isExpanded, toggleSidebar, sidebarWidth } = useSidebar()
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-gradient-to-b from-primary via-primary to-primary/95 transition-all duration-300 flex flex-col overflow-hidden ${
-        isExpanded ? 'w-64' : 'w-20'
-      }`}
+      style={{ width: sidebarWidth }}
+      className="fixed left-0 top-0 z-30 h-screen bg-gradient-to-b from-primary via-primary to-primary/95 transition-all duration-300 flex flex-col overflow-hidden"
     >
+
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-primary/30 px-6 py-5">
+      <div className={`flex items-center ${isExpanded ? 'justify-between px-6' : 'justify-center px-2'} border-b border-primary/30 py-5`}>
         {isExpanded && (
           <Link href="/" className="flex items-center gap-3">
             <BrandLogo size="sm" />
@@ -56,11 +61,13 @@ export function Sidebar() {
           </Link>
         )}
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-primary-foreground/60 hover:text-primary-foreground transition-colors"
+          type="button"
+          onClick={toggleSidebar}
+          className="text-primary-foreground/60 hover:text-primary-foreground transition-colors p-1.5 rounded-lg hover:bg-primary-foreground/10"
+          title={isExpanded ? 'Collapse Sidebar' : 'Expand Sidebar'}
         >
           <ChevronDown
-            className={`size-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            className={`size-5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : '-rotate-90'}`}
           />
         </button>
       </div>
@@ -84,7 +91,10 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+              title={!isExpanded ? item.label : undefined}
+              className={`group flex items-center ${
+                isExpanded ? 'gap-3 px-4' : 'justify-center px-2'
+              } rounded-xl py-3 text-sm font-medium transition-all ${
                 isActive
                   ? 'bg-accent text-accent-foreground shadow-lg'
                   : 'text-primary-foreground/80 hover:bg-primary-foreground/10'
@@ -96,6 +106,7 @@ export function Sidebar() {
           )
         })}
       </nav>
+
 
       {/* Bottom Section */}
       {isExpanded && (

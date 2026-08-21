@@ -24,14 +24,16 @@ class AssessmentService:
         self.repository = AssessmentRepository(db)
 
     def _check_teacher_or_admin(self, current_user: User):
-        if current_user.role.name not in ["TEACHER", "ADMIN"]:
+        user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role).lower()
+        if user_role not in ["teacher", "admin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only teachers and admins can manage assessments",
             )
 
     def _check_owner_or_admin(self, assessment: Assessment, current_user: User):
-        if current_user.role.name == "ADMIN":
+        user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role).lower()
+        if user_role == "admin":
             return
         if assessment.created_by != current_user.id:
             course = self.repository.db.query(Course).filter(Course.id == assessment.course_id).first()
@@ -48,12 +50,14 @@ class AssessmentService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Course not found",
             )
-        if current_user.role.name != "ADMIN" and course.teacher_id != current_user.id:
+        user_role = str(current_user.role.value if hasattr(current_user.role, "value") else current_user.role).lower()
+        if user_role != "admin" and course.teacher_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You are not authorized to manage assessments for this course",
             )
         return course
+
 
     def _validate_assessment_questions(
         self, course_id: int, question_ids: list[int] | None, is_publishing: bool

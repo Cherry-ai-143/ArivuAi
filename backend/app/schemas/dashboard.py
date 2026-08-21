@@ -28,6 +28,10 @@ class TeacherDashboardResponse(BaseModel):
     notifications: list[dict[str, Any]]
     uploads: list[dict[str, Any]]
     question_bank: dict[str, Any]
+    performance_overview: dict[str, Any] | None = None
+    course_overview: dict[str, Any] | None = None
+    top_performing_students: list[dict[str, Any]] | None = None
+    upcoming_activities: list[dict[str, Any]] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

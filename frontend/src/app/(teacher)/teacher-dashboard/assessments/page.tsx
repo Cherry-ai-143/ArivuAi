@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Search, FileText } from "lucide-react";
 import { AssessmentsList } from "@/components/teacher/assessments/assessments-list";
 import { CreateAssessmentDialog } from "@/components/teacher/assessments/create-assessment-dialog";
 import { getAssessments } from "@/lib/services/assessment.service";
 import type { Assessment, AssessmentStatus } from "@/types/assessment";
-import { useEffect, useState as useReactState } from "react";
 
 const FILTER_TABS: { key: "all" | AssessmentStatus; label: string }[] = [
   { key: "all", label: "All" },
@@ -16,13 +16,16 @@ const FILTER_TABS: { key: "all" | AssessmentStatus; label: string }[] = [
 ];
 
 export default function AssessmentsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<
+
     "all" | AssessmentStatus
   >("all");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [assessments, setAssessments] = useReactState<Assessment[]>([]);
-  const [loading, setLoading] = useReactState(true);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [loading, setLoading] = useState(true);
+
 
   const loadAssessments = async () => {
     try {
@@ -40,18 +43,19 @@ export default function AssessmentsPage() {
     loadAssessments();
   }, []);
 
+  const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
+
   const handlePreview = (a: Assessment) => {
-    // Preview modal handled in a subsequent phase
-    console.log("Preview assessment", a.id);
+    router.push(`/teacher-dashboard/assessments/${a.id}`);
   };
 
   const handleEdit = (a: Assessment) => {
-    // Edit flow handled in a subsequent phase
-    console.log("Edit assessment", a.id);
+    setEditingAssessment(a);
   };
 
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto min-h-screen">
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -119,6 +123,24 @@ export default function AssessmentsPage() {
         onOpenChange={setIsCreateOpen}
         onCreated={loadAssessments}
       />
+
+      {/* Edit Dialog */}
+      {editingAssessment && (
+        <CreateAssessmentDialog
+          open={!!editingAssessment}
+          onOpenChange={(open) => {
+            if (!open) setEditingAssessment(null);
+          }}
+          initialCourseId={editingAssessment.course_id}
+          initialChapterId={editingAssessment.chapter_id}
+          initialLessonId={editingAssessment.lesson_id}
+          initialSelectedQuestionIds={editingAssessment.assessment_questions?.map((aq) => aq.question_id || aq.id)}
+          onCreated={() => {
+            setEditingAssessment(null);
+            loadAssessments();
+          }}
+        />
+      )}
     </div>
   );
-}
+}
